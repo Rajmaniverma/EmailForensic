@@ -1,0 +1,242 @@
+Delivered-To: rajmaniverma8051@gmail.com
+Received: by 2002:ac9:71de:0:b0:63c:865d:fd1c with SMTP id l30csp6811863oco;
+        Thu, 3 Sep 2026 01:23:25 -0700 (PDT)
+X-Received: by 2002:a05:622a:480a:b0:51b:f40b:2fb5 with SMTP id d75a77b69052e-53036c38099mr130294961cf.17.1788423805547;
+        Thu, 03 Sep 2026 01:23:25 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1788423805; cv=none;
+        d=google.com; s=arc-20260327;
+        b=FmyKRBuDnzhWn6WGKU8NOvq1QShbXlj126vfSJB2FUBU0f93IjBvYw+l+6JkO1vvVc
+         55tbEkRn7Hmuhb0uY3+o/StHkcaMnmdRDxk0mV8mP8S5ohdcWoNjQ92Fyz2ajenaP/Ks
+         9ZRQieYW3mDz27zAKAGsgkELPKEg1WD4bhqaViHD4Ep5ym7ILngdBmWjgOVAThj4qzpZ
+         JL4GEbpfiTNHjQvpNWV7npFDK0cffVFLmSpJ+A/zfgDlncwL/1KTMkGL1Mttw+2xSfQw
+         MHY8HS3k/YPA8ub5IVhc9NFGanpzXlt5YtXrlNZJG4xZ/6advuinzgFAbHFIYy4WMseg
+         sVbg==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20260327;
+        h=feedback-id:content-transfer-encoding:mime-version:to:reply-to:from
+         :subject:date:message-id:dkim-signature:dkim-signature;
+        bh=VatPpwFC7cy5Uv8JWTo4e0pdAH6QEWRNDgEHiRDzGdg=;
+        fh=6zuUt/JVTt9MbwoxB/jZy5ouyX92ZwA8Pv/Rs253DdE=;
+        b=qSd7JmN0vQyBGZWPhTw83A2LbrzqkbZtmk3GaNfxvrCsVWqUF6sZBNU8m/+Kr4Vg2s
+         ZJdTmcHWFpibQUI73qeoLnFp7pzHmziZ/aw0DkIoSmyFE1EjXsJpr0VkGjYzu4av9MiA
+         fgjY43uNUyVIQ3HzkRVGsGH/9wKI7qdKfNfXvrxSy7nNzGPFv9F1xX8GnXNG4keMqSEz
+         oyzc8Qb4/vOjbJOdGIgFZJog7ccKWjKcm/NjiSRuFbEAh/hf3hc0ygNzelaJUQe8RRwC
+         ikCe+8egyeWUkoYTtTb+LvIV1oZl5AWwg+f7wrIXA7l4ATH7VvChRb4WvVgpDCpAbmXp
+         ZzSQ==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@e-yantra.org header.s=sroltcc4uqigs2umralgwudnfm62xbjl header.b=I8R5hueM;
+       dkim=pass header.i=@amazonses.com header.s=224i4yxa5dv7c2xz3womw6peuasteono header.b=VdqJppK4;
+       spf=pass (google.com: domain of 010001a0665d9921-103dba04-36e5-4ad8-9e94-f3f82e5049da-000000@email.e-yantra.org designates 54.240.9.107 as permitted sender) smtp.mailfrom=010001a0665d9921-103dba04-36e5-4ad8-9e94-f3f82e5049da-000000@email.e-yantra.org;
+       dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=e-yantra.org
+Return-Path: <010001a0665d9921-103dba04-36e5-4ad8-9e94-f3f82e5049da-000000@email.e-yantra.org>
+Received: from a9-107.smtp-out.amazonses.com (a9-107.smtp-out.amazonses.com. [54.240.9.107])
+        by mx.google.com with ESMTPS id d75a77b69052e-53032ffb4e5si59723351cf.43.2026.09.03.01.23.25
+        for <rajmaniverma8051@gmail.com>
+        (version=TLS1_3 cipher=TLS_AES_128_GCM_SHA256 bits=128/128);
+        Thu, 03 Sep 2026 01:23:25 -0700 (PDT)
+Received-SPF: pass (google.com: domain of 010001a0665d9921-103dba04-36e5-4ad8-9e94-f3f82e5049da-000000@email.e-yantra.org designates 54.240.9.107 as permitted sender) client-ip=54.240.9.107;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@e-yantra.org header.s=sroltcc4uqigs2umralgwudnfm62xbjl header.b=I8R5hueM;
+       dkim=pass header.i=@amazonses.com header.s=224i4yxa5dv7c2xz3womw6peuasteono header.b=VdqJppK4;
+       spf=pass (google.com: domain of 010001a0665d9921-103dba04-36e5-4ad8-9e94-f3f82e5049da-000000@email.e-yantra.org designates 54.240.9.107 as permitted sender) smtp.mailfrom=010001a0665d9921-103dba04-36e5-4ad8-9e94-f3f82e5049da-000000@email.e-yantra.org;
+       dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=e-yantra.org
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/simple;
+	s=sroltcc4uqigs2umralgwudnfm62xbjl; d=e-yantra.org; t=1788423805;
+	h=Message-ID:Date:Subject:From:Reply-To:To:MIME-Version:Content-Type:Content-Transfer-Encoding;
+	bh=3Bgw8YmuUPljtVnbMTc1KGvxUZKCFAgaNHkItEgUseU=;
+	b=I8R5hueMUIFsn48d1/BAxOmygBYDQoY104Og1D07sCQZ6J/mAt0FM/r2E2wuCMWy
+	7RAgguFVaWSRG1P16jOdvhp8vhXk2HOlC8uqUKzSJb8JEiZRJdJPbDu5MuB2FrM/q7q
+	r8I8wZC0mNrudWo8FWAW35bSTZ4toES9RNid/E1Y=
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/simple;
+	s=224i4yxa5dv7c2xz3womw6peuasteono; d=amazonses.com; t=1788423805;
+	h=Message-ID:Date:Subject:From:Reply-To:To:MIME-Version:Content-Type:Content-Transfer-Encoding:Feedback-ID;
+	bh=3Bgw8YmuUPljtVnbMTc1KGvxUZKCFAgaNHkItEgUseU=;
+	b=VdqJppK4o1OMHeI0mlXc0ftO9wAXdApo1pDiINgi4Cnb6/Rlo6LQzNi3vuE3epFv
+	FUTN5eHzKSKNf61PmTyIW3aVUffKTOveF8ZGHy1wgGPKuR8SiQQTGUGFt0lNgYkEI1w
+	htoK43FtIq6GG01D39Xa03mOp3fj4nqQuTnPCdsU=
+Message-ID: <010001a0665d9921-103dba04-36e5-4ad8-9e94-f3f82e5049da-000000@email.amazonses.com>
+Date: Thu, 3 Sep 2026 08:23:25 +0000
+Subject: Your Next Big Idea Starts Here =?utf-8?Q?=F0=9F=9A=80?= | eYIC
+ =?utf-8?Q?2026=E2=80=9327?= Registrations Open
+From: "e-Yantra, IIT Bombay" <helpdesk@e-yantra.org>
+Reply-To: eyic@e-yantra.org
+To: rajmaniverma8051@gmail.com
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+Feedback-ID: ::1.us-east-1.5C3YICG2w8KU6SvGI14YL5qU3DJApuvaE1Y8xX0ap9g=:AmazonSES
+X-SES-Outgoing: 2026.09.03-54.240.9.107
+
+<div style=3D"width:700px; padding: 0px; background-color:#d1d8ce">
+<div =
+style=3D"padding:0px; margin:0px; background-color:#d1d8ce; text-align:cent=
+er;">
+   <a href=3D"https://portal.e-yantra.org" target=3D"_blank">
+   =
+ <img style=3D"padding: 20px;" width=3D"294" src=3D"https://eyrc24.e-yantra=
+.org/img/footer_iitb_eyantra.png" alt=3D"e-Yantra"/>
+  </a>
+</div>
+<i=
+mg class=3D"adapt-img" src=3D"https://eyrc24.e-yantra.org/img/header_below_=
+email.png" alt=3D""
+  style=3D"display:block;border:0;outline:none;text-d=
+ecoration:none;-ms-interpolation-mode:bicubic" width=3D"100%">
+
+<!-- co=
+ntent -->
+<div style=3D"text-align:center;padding: 20px 0px 20px 0px; bac=
+kground-color: #ededed; font-family: Verdana, Geneva, sans-serif;font-size:=
+14px;">
+  <div class=3D"content">
+    <table>
+      <tr>
+        <t=
+d style=3D"text-align: justify; padding: 0px 30px 0px 30px;">
+          <=
+p><tt>Dear e-Yantrik,</tt></p>
+
+<p><tt>Greetings from Team e-Yantra!</tt></p>
+
+<p><tt>Since you have been a part of one of our previous <strong>e-Yantra i=
+nitiatives</strong> we are excited to invite you to the <strong>13th editio=
+n of the e-Yantra Innovation Challenge (eYIC 2026&ndash;27)</strong>.</tt><=
+/p>
+
+<p><tt>Registrations are now open, and we would love to have you back!</tt>=
+</p>
+
+<h3><tt><strong>This year, you choose the problem.</strong></tt></h3>
+
+<p><tt>Participate in one of two independent tracks:</tt></p>
+
+<ul>
+=09<li><tt><strong>Agriculture:</strong> Solve real-world challenges in far=
+ming, food production, and agricultural technology.</tt></li>
+=09<li><tt><strong>Sustainability:</strong> Build innovative solutions for =
+a cleaner, greener, and more resilient future.</tt></li>
+</ul>
+
+<p><tt>Over the course of <strong>six months</strong>, your team will take =
+a real problem from <strong>idea &rarr; prototype &rarr; pitch</strong>, wh=
+ile learning design thinking, technology stacks, customer discovery, commun=
+ication, and entrepreneurship.</tt></p>
+
+<h3><tt><strong>Who can participate?</strong></tt></h3>
+
+<p><tt>If you&rsquo;ve already completed your graduation, share this email =
+with your college-going friends, juniors, and family members who may be int=
+erested in participating.</tt></p>
+
+<p><tt>Use the referral code <strong>EARLY26</strong> to get an <strong>add=
+itional 10% discount</strong>, on top of the <strong>20% Early Bird discoun=
+t</strong>, on the registration fee.</tt></p>
+
+<p><tt>Form a team of 2&ndash;4 members. Reconnect with your previous teamm=
+ates, or team up with juniors and friends who are ready to innovate!</tt></=
+p>
+
+<h3><tt><strong>Important Dates</strong></tt></h3>
+
+<ul>
+=09<li><tt><strong>Registration Deadline:</strong> <strong>25 September 202=
+6, 11:59 PM</strong></tt></li>
+=09<li><tt><strong>Early Bird Discount (20%):</strong> Valid till <strong>1=
+1 September 2026, 11:59 PM</strong></tt></li>
+</ul>
+
+<h3><tt><strong>Register Now</strong></tt></h3>
+
+<p><tt>Watch the Launch film:<a href=3D"https://youtu.be/XC9XzXkMoMo?utm_so=
+urce=3Demail&amp;utm_medium=3Dreferral&amp;utm_campaign=3Deyic2627_referral=
+"> https://youtu.be/XC9XzXkMoMo</a></tt></p>
+
+<p><tt>Registration Portal :<a href=3D"https://eyic.e-yantra.org/team/regis=
+ter?utm_source=3Demail&amp;utm_medium=3Dreferral"> https://eyic.e-yantra.or=
+g/</a></tt></p>
+
+<p><tt>For any queries, write to <strong>eyic@e-yantra.org</strong> or call=
+ <strong>022-2576 4986 / +91 8097014114</strong>.</tt></p>
+
+<p><tt>We look forward to seeing you innovate with us once again!</tt></p>
+
+<p><tt>Warm regards,</tt></p>
+
+<p><tt><strong>Team e-Yantra</strong><br />
+CSE Department, IIT Bombay<br />
+<a href=3D"http://www.e-yantra.org/">www.e-yantra.org</a></tt></p>
+      =
+  </td>
+      </tr>
+          </table>
+  </div>
+</div>
+<!-- foote=
+r -->
+<!-- <div style=3D"background-color: #FFF;">
+    <img class=3D"ad=
+apt-img" src=3D"https://eyrc24.e-yantra.org/img/eyic_sponsors.png" alt=3D""=
+
+    style=3D"display:block;border:0;outline:none;margin: 2px auto;" widt=
+h=3D"70%">
+</div> -->
+<div style=3D"padding:20px 50px; margin:0px; back=
+ground-color: #999999;">
+  <p align=3D"center">e-Yantra is a project spon=
+sored by MoE <br>through the National Mission on Education through ICT (NME=
+ICT)</p>
+  <p align=3D"center" style=3D"color:white;">Share this</p>
+  =
+<div style=3D"display:flex;justify-content:center;">
+    <div>
+      <a=
+ href=3D"//www.facebook.com/eyantra" target=3D"_blank" style=3D"margin-righ=
+t: 10px;">
+        <img width=3D"25" height=3D"25" src=3D"https://portal.=
+e-yantra.org/img/social/facebook.png" alt=3D"Facebook"/>
+      </a>
+   =
+ </div>
+    <!-- twitter -->
+    <div>
+      <a href=3D"//twitter.com=
+/eyantra_iitb" target=3D"_blank" style=3D"margin-right: 10px;">
+        <=
+img width=3D"25" height=3D"25" src=3D"https://portal.e-yantra.org/img/socia=
+l/twitter.png" alt=3D"twitter"/>
+      </a>
+    </div>
+    <!-- linke=
+din -->
+    <div>
+      <a href=3D"https://www.linkedin.com/company/144=
+07133/admin/" target=3D"_blank" style=3D"margin-right: 10px;">
+        <i=
+mg width=3D"25" height=3D"25" src=3D"https://portal.e-yantra.org/img/social=
+/linkedin.png" alt=3D"linkedin"/>
+      </a>
+    </div>
+    <!-- inst=
+a -->
+    <div>
+      <a href=3D"//www.instagram.com/eyantra/" target=
+=3D"_blank" style=3D"margin-right: 10px;">
+        <img width=3D"25" heig=
+ht=3D"25" src=3D"https://portal.e-yantra.org/img/social/instagram.png" alt=
+=3D"instagram"/>
+      </a>
+    </div>
+    <!-- youtube -->
+    <di=
+v>
+      <a href=3D"https://www.youtube.com/user/eyantra/videos" target=
+=3D"_blank" style=3D"margin-right: 10px;">
+        <img width=3D"25" heig=
+ht=3D"25" src=3D"https://portal.e-yantra.org/img/social/youtube.png" alt=3D=
+"Youtube"/>
+      </a>
+    </div>
+  </div>
+</div>
+</div>
+
