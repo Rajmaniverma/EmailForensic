@@ -38,6 +38,8 @@ const RECENT_ANALYSES = [
   { subject: "Quarterly report attached", sender: "reports@company.com", type: "—", score: 6, status: "Safe", date: "Sep 08, 2026" },
 ];
 
+
+
 const SERVICES = [
   { name: "Email Analysis", status: "Operational" },
   { name: "Threat Detection", status: "Operational" },
@@ -45,14 +47,15 @@ const SERVICES = [
   { name: "Database", status: "Operational" },
 ];
 
-const NAV_ITEMS = [
-  { icon: "⌂", label: "Dashboard" , path: "/"},
-  { icon: "◉", label: "Email Analysis" ,path: "/email-analysis"},
-  { icon: "◷", label: "Analysis History" },
-  { icon: "◈", label: "Threat Intelligence" },
-  { icon: "◌", label: "Reports" },
-  { icon: "⚙", label: "Settings" },
+export const NAV_ITEMS = [
+  { icon: "⌂", label: "Dashboard", path: "/" },
+  { icon: "◉", label: "Email Analysis", path: "/email-analysis" },
+  { icon: "◷", label: "Analysis History", path: "/history" },
+  { icon: "◈", label: "Threat Intelligence", path: "/threat-intelligence" },
+  { icon: "◌", label: "Reports", path: "/reports" },
+  { icon: "⚙", label: "Settings", path: "/settings" },
 ];
+
 
 const NOTIFICATIONS = [
   { title: "High risk email detected", time: "2m ago", tone: "danger" },
@@ -189,48 +192,13 @@ function Dashboard() {
   const [email, setEmail] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzed, setAnalyzed] = useState(false);
-  const [activeNav, setActiveNav] = useState("Dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
   const timeoutRef = useRef(null);
-  const notifRef = useRef(null);
 
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, []);
-
-  // Close the notifications dropdown on outside click or Escape.
-  useEffect(() => {
-    if (!notifOpen) return;
-
-    const handleClickOutside = (e) => {
-      if (notifRef.current && !notifRef.current.contains(e.target)) {
-        setNotifOpen(false);
-      }
-    };
-    const handleEscape = (e) => {
-      if (e.key === "Escape") setNotifOpen(false);
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [notifOpen]);
-
-  // Close the mobile sidebar drawer on Escape.
-  useEffect(() => {
-    if (!sidebarOpen) return;
-    const handleEscape = (e) => {
-      if (e.key === "Escape") setSidebarOpen(false);
-    };
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [sidebarOpen]);
 
   const handleAnalyze = () => {
     if (!email.trim() || analyzing) return;
@@ -250,117 +218,9 @@ function Dashboard() {
   };
 
   return (
-    <div className={`dashboard ${sidebarOpen ? "sidebar-open" : ""}`}>
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div className="mobile-overlay" onClick={() => setSidebarOpen(false)} />
-      )}
-
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="logo">
-          <span className="logo-mark">◈</span> MAIL<span>SHIELD</span> AI
-        </div>
-
-        <nav>
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-      key={item.label}
-      to={item.path}
-      end={item.path === "/"}         
-      className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
-      onClick={() => setSidebarOpen(false)}   
-    >
-      <span className="nav-icon">{item.icon}</span>
-      {item.label}
-    </NavLink>
-          ))}
-        </nav>
-
-        <div className="sidebar-footer">
-          <div className="system-status">
-            <span className="status-dot" />
-            SYSTEM ONLINE
-          </div>
-
-          <div className="profile-box">
-            <div className="avatar">SA</div>
-            <div className="profile-meta">
-              <strong>Security Analyst</strong>
-              <small>SOC Analyst</small>
-            </div>
-            <button className="logout-btn" aria-label="Log out">
-              ⏻
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="main-content">
-        <header className="topbar">
-          <div className="topbar-left">
-            <button
-              className="hamburger"
-              aria-label="Toggle sidebar"
-              aria-expanded={sidebarOpen}
-              onClick={() => setSidebarOpen((v) => !v)}
-            >
-              ☰
-            </button>
-            <div>
-              <p className="eyebrow">SECURITY OPERATIONS CENTER</p>
-              <h1>Security Dashboard</h1>
-              <p className="subtitle">Monitor and analyze suspicious email activity</p>
-            </div>
-          </div>
-
-          <div className="topbar-right">
-            <div className="search-box">
-              <span aria-hidden="true">⌕</span>
-              <input type="text" placeholder="Search analyses, senders..." aria-label="Search" />
-            </div>
-
-            <div className="notif-wrap" ref={notifRef}>
-              <button
-                className="icon-btn"
-                aria-label="Notifications"
-                aria-haspopup="true"
-                aria-expanded={notifOpen}
-                onClick={() => setNotifOpen((v) => !v)}
-              >
-                🔔
-                <span className="notif-dot" />
-              </button>
-
-              {notifOpen && (
-                <div className="notif-dropdown" role="menu">
-                  <p className="notif-heading">Notifications</p>
-                  {NOTIFICATIONS.map((n) => (
-                    <div className="notif-item" key={n.title}>
-                      <span className={`notif-tag tone-${n.tone}`} />
-                      <div>
-                        <strong>{n.title}</strong>
-                        <small>{n.time}</small>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="user-box">
-              <div className="avatar">SA</div>
-              <div>
-                <strong>Security Analyst</strong>
-                <small>SOC Analyst</small>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Stats */}
-        <section className="stats-grid">
+    <>
+      {/* Stats */}
+      <section className="stats-grid">
           {STATS.map((stat, i) => (
             <StatCard stat={stat} index={i} key={stat.id} />
           ))}
@@ -624,8 +484,7 @@ function Dashboard() {
             </section>
           </div>
         </div>
-      </main>
-    </div>
+    </>
   );
 }
 
