@@ -45,7 +45,7 @@ app = FastAPI(
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key="your-secret-key-change-this"
+    secret_key=os.getenv("SECRET_KEY_VALUE")
 )
 # ============================================================
 # OAUTH CONFIGURATION

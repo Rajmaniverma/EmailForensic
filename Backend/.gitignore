@@ -12,3 +12,9 @@ wheels/
 
 credentials.json
 token.json
+
+
+credentials.json
+token.json
+.env
+.env.*
