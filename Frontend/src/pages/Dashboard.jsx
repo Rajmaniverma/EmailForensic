@@ -13,7 +13,7 @@ function Dashboard() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch(`${API_URL}/auth/status`, {
+        const response = await fetch(`https://emailforensic.onrender.com/auth/status`, {
           method: "GET",
           credentials: "include",
         });
@@ -23,6 +23,8 @@ function Dashboard() {
         }
 
         const data = await response.json();
+        console.log("data:",data)
+        console.log(data.authenticated)
 
         console.log("Dashboard auth:", data);
 

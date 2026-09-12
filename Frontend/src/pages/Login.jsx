@@ -12,7 +12,7 @@ function Login() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch(`${API_URL}/auth/status`, {
+        const response = await fetch(`https://emailforensic.onrender.com/auth/status`, {
           method: "GET",
           credentials: "include",
         });
