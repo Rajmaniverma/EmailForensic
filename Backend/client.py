@@ -25,16 +25,6 @@ class GmailClient:
         Return clean email data
     """
 
-    def __init__(self):
-        # Get OAuth credentials from auth.py
-        creds = get_credentials()
-
-        # Create Gmail API service
-        self.service = build(
-            "gmail",
-            "v1",
-            credentials=creds
-        )
 
     # ========================================================
     # GET EMAIL BY GMAIL API MESSAGE ID
