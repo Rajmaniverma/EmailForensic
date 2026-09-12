@@ -1,29 +1,191 @@
-From: Microsoft Security <security-alert@micros0ft-support.example>
-To: user@example.com
-Reply-To: account-verify@secure-login.example
-Subject: URGENT: Your account will be suspended =?utf-8?b?4oCU?= verify
- immediately
-Date: Wed, 09 Sep 2026 20:41:00 -0000
-Message-ID: <178898646065.308.14155739134215508985@localhost>
-Content-Type: text/plain; charset="utf-8"
-Content-Transfer-Encoding: quoted-printable
+Delivered-To: rajmaniverma8051@gmail.com
+Received: by 2002:a05:6802:6702:20b0:64d:984b:ee44 with SMTP id x2-n2csp1621894occ;
+        Wed, 9 Sep 2026 19:57:21 -0700 (PDT)
+X-Received: by 2002:a05:6a21:e85:b0:3d3:b02a:7252 with SMTP id adf61e73a8af0-3da3a1fb3aamr62035965637.28.1789009041354;
+        Wed, 09 Sep 2026 19:57:21 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1789009041; cv=none;
+        d=google.com; s=arc-20260327;
+        b=aXnneWVkkStG2SDzK2YzS09FWOQAnowWa+bLZwy5J1a87i03lAb9VmiU3zE+4rFqAq
+         O8xWrElmrrjr1gZd4en43QqKKW5ioCmL8ZiNx6lW2PlkVt+VhFAA9BXfq+jpGSEwpOYu
+         Vd6WrQIHRjCNMs/cLJ3/mm1IE+j8mz7kN+VU2Doh9RSe1Tbm/zNTpcefr02E+Y0tnCao
+         EHTHGl9kil0FQSm5/QBGv6aT94lbhLrSqnpdk2WOkfTHLwUg3JYZ5zJBQFnrboFYwdK1
+         HkFb3st10TDYKemVgPtCDbtKpOG8n4A+4Zs3VvoWLSRERCFy2beTv/3DvguU4ufzHxIK
+         v48g==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20260327;
+        h=mime-version:to:subject:date:message-id:from:feedback-id
+         :dkim-signature:dkim-signature;
+        bh=sG7o3ckGLkPyJDUwliixg+vT9cM/iyQDPPkLl8EEucI=;
+        fh=6zuUt/JVTt9MbwoxB/jZy5ouyX92ZwA8Pv/Rs253DdE=;
+        b=DV0XQKZ5624iUVtleUpB1jP735w1TLCMtyyfArI6uecRf7hGOscO/rJx942c1XxwKd
+         SBiU2LddM9Wj4YW8kZ42jMgdhOkrr+lbFFzDHxBFlodF9O3KZ69zP2Rlc/lCn9EryBnv
+         0DLhK2G1qS/e1EywdTt6+9xTechtCG+Kz78hdRir6Sn5hqt7orFdBi+b2ia/gQUfyqB1
+         /FEDxq65PfjANLW7jaNsjjl3zlTG9pTQoLTsIREIUs/ca9YhOd9nHHfmJDwYoL8zQLdM
+         tKBD9MNpJXlkbJwnsKXmXRmn5z4wr3sbWNPpUuhp67Tcs5kjlGwURBiUAfSqgrRLc3l6
+         Xykg==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@cloudflare-email.net header.s=cf2024-1 header.b=SlwplpQD;
+       dkim=pass header.i=@lavrox.com header.s=cf-bounce header.b=QKNG+qcU;
+       spf=pass (google.com: domain of bounces@cf-bounce.lavrox.com designates 104.30.2.18 as permitted sender) smtp.mailfrom=bounces@cf-bounce.lavrox.com;
+       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=lavrox.com
+Return-Path: <bounces@cf-bounce.lavrox.com>
+Received: from c-bi.cloudflare-email.net (c-bi.cloudflare-email.net. [104.30.2.18])
+        by mx.google.com with ESMTPS id 41be03b00d2f7-cc46c6ad432si23458479a12.32.2026.09.09.19.57.20
+        for <rajmaniverma8051@gmail.com>
+        (version=TLS1_3 cipher=TLS_AES_128_GCM_SHA256 bits=128/128);
+        Wed, 09 Sep 2026 19:57:21 -0700 (PDT)
+Received-SPF: pass (google.com: domain of bounces@cf-bounce.lavrox.com designates 104.30.2.18 as permitted sender) client-ip=104.30.2.18;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@cloudflare-email.net header.s=cf2024-1 header.b=SlwplpQD;
+       dkim=pass header.i=@lavrox.com header.s=cf-bounce header.b=QKNG+qcU;
+       spf=pass (google.com: domain of bounces@cf-bounce.lavrox.com designates 104.30.2.18 as permitted sender) smtp.mailfrom=bounces@cf-bounce.lavrox.com;
+       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=lavrox.com
+DKIM-Signature: v=1; a=rsa-sha256; s=cf2024-1; d=cloudflare-email.net; c=relaxed/relaxed;
+	h=To:Subject:Date:From:Feedback-ID:from:reply-to:cc:resent-date
+	:resent-from:resent-to:resent-cc:in-reply-to:references:list-id:list-help
+	:list-unsubscribe:list-unsubscribe-post:list-subscribe:list-post
+	:list-owner:list-archive; t=1789009040; x=1789613840; bh=sG7o3ckGLkPyJDUwli
+	ixg+vT9cM/iyQDPPkLl8EEucI=; b=SlwplpQDe5TshRaZ96Vn3TFWLShlI8Gzrk+boCjtcSsO0
+	/D/JUNz3HVufS2dqILavBR0qlrsOXbt/k1TQQl73fF+HmnRPHA9qBBshkv5Fcs/pjCqGFwpRagy
+	yBHJNE5hj1b/PbGfJ6qUVQmIpn29six+A/kvvCnbn9u/M1cD9DNaRCbpEHOqkLU7Ur1Xo+HGhp6
+	6xEsNF3fWSTvUL1vKBMAHVxe3ykrX8m591IKd0TJcucBB0RJgQZVkZoczis0TckQxBCKuIw6GUH
+	712dAoa4/9gJCPGhB2FDe+WBbK1nPthqAwmMexOsPyHsPF3X3ulql58QdAbEUZOTHh0EOmog==;
+DKIM-Signature: v=1; a=rsa-sha256; s=cf-bounce; d=lavrox.com; c=relaxed/relaxed;
+	h=To:Subject:Date:From:Feedback-ID:from:reply-to:cc:resent-date
+	:resent-from:resent-to:resent-cc:in-reply-to:references:list-id:list-help
+	:list-unsubscribe:list-unsubscribe-post:list-subscribe:list-post
+	:list-owner:list-archive; t=1789009040; x=1789613840; bh=sG7o3ckGLkPyJDUwli
+	ixg+vT9cM/iyQDPPkLl8EEucI=; b=QKNG+qcUaf7PTQYAfegKPKVia4k8vSCEMEgWZtZl93RyN
+	1qk9HHYQpQH2wv3ZZlABHEBU8rNqkN4amom5/QyVUX48axJ0l5splW5ePBCoTdbcLeLZqV0WvXS
+	sPHZJT+/6dP6eIZ8HPdNaa2/9reN6y3wqMZMDX+2UhSAXs2gkRKt6a73/IMJ+mHqyKnCxhhl0is
+	S1ZZ6eLH3dDT787tRvqB/JIuThrI+/6iC0HOeHnUq8LSUMlOXPNl9zLhAP9FTXp5ULLSm8evVN7
+	+h2zbDtYpXzXbYykNHNlYgB9ORK8Hmkosr00CKJCMj2XCGX7Ao1aaLJZNlZujjocTLdK7JKg==;
+Feedback-ID: lavrox.com:5:3:Cloudflare
+From: "Lavrox Team" <support@lavrox.com>
+Message-ID: <62M3Fqh6JlxihUyYK3AgyOR9iz6NXKrSeFA6@lavrox.com>
+Date: Thu, 10 Sep 2026 02:57:17 +0000
+Subject: Welcome to Lavrox
+To: rajmaniverma8051@gmail.com
 MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="S3zZxOc0eBdOABSXSU8pnto3CpDjVnjl1lniIK7G"
 
-Dear Customer,
+--S3zZxOc0eBdOABSXSU8pnto3CpDjVnjl1lniIK7G
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
 
-URGENT ACTION REQUIRED.
+Welcome to Lavrox, Rajmani!
 
-We detected unusual activity on your account. Your account will be suspended =
-within 24 hours unless you verify your identity immediately.
+Your email is verified. Log into your Lavrox Dashboard to manage your IPWho=
+ API including API keys, account details, alerts, and usage statistics.
 
-Please verify your account by visiting:
-http://192.0.2.10/secure-login/verify-account?session=3D847392847239482739482=
-739482739482739
+Open your dashboard:
+https://dashboard.lavrox.com
 
-Please confirm your username, password, OTP and other account information.
+Documentation: https://www.lavrox.com/docs
 
-If you do not complete verification immediately, your account may be blocked =
-and further action may be taken.
+Lavrox Team
+--S3zZxOc0eBdOABSXSU8pnto3CpDjVnjl1lniIK7G
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
 
-Regards,
-Microsoft Account Security Team
+
+<!DOCTYPE html>
+<html lang=3D"en">
+<head>
+  <meta charset=3D"UTF-8">
+  <meta name=3D"viewport" content=3D"width=3Ddevice-width, initial-scale=3D=
+1.0">
+  <meta http-equiv=3D"X-UA-Compatible" content=3D"IE=3Dedge">
+  <title>Lavrox</title>
+</head>
+<body style=3D"margin: 0; padding: 0; background-color: #f8fafc; font-famil=
+y: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif=
+;">
+  <div style=3D"display: none; max-height: 0; overflow: hidden;">Welcome to=
+ Lavrox =E2=80=94 your account is ready.</div>
+  <table role=3D"presentation" width=3D"100%" cellspacing=3D"0" cellpadding=
+=3D"0" style=3D"background-color: #f8fafc;">
+    <tr>
+      <td align=3D"center" style=3D"padding: 40px 20px;">
+        <table role=3D"presentation" width=3D"100%" cellspacing=3D"0" cellp=
+adding=3D"0" style=3D"max-width: 600px;">
+          <tr>
+            <td align=3D"center" style=3D"padding-bottom: 32px;">
+              <a href=3D"https://www.lavrox.com" style=3D"text-decoration: =
+none;">
+                <span style=3D"font-size: 28px; font-weight: 800; color: #0=
+F172A; letter-spacing: -0.5px;">Lavrox</span>
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <table role=3D"presentation" width=3D"100%" cellspacing=3D"0"=
+ cellpadding=3D"0" style=3D"background-color: #ffffff; border-radius: 16px;=
+ box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); overflow: hidden;">
+                <tr>
+                  <td style=3D"height: 4px; background: linear-gradient(90d=
+eg, #0F172A 0%, #6366F1 100%);"></td>
+                </tr>
+                <tr>
+                  <td style=3D"padding: 48px 40px;">
+                   =20
+    <h1 style=3D"margin: 0 0 16px; font-size: 28px; font-weight: 700; color=
+: #0F172A; text-align: center;">
+      Welcome to Lavrox, Rajmani!
+    </h1>
+    <p style=3D"margin: 0 0 24px; font-size: 16px; line-height: 1.6; color:=
+ #475569; text-align: center;">
+      Your email is verified. Log into your Lavrox Dashboard to manage your=
+ IPWho API including API keys, account details, alerts, and usage statistic=
+s.
+    </p>
+   =20
+  <div style=3D"text-align: center; margin: 32px 0;">
+    <a href=3D"https://dashboard.lavrox.com" style=3D"display: inline-block=
+; padding: 14px 28px; background-color: #0F172A; color: #ffffff; text-decor=
+ation: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
+      Open dashboard
+    </a>
+  </div>
+
+    <p style=3D"margin: 24px 0 0; font-size: 14px; line-height: 1.6; color:=
+ #64748b; text-align: center;">
+      New here? Read the <a href=3D"https://www.lavrox.com/docs" style=3D"c=
+olor: #6366F1;">getting started guide</a>.
+    </p>
+   =20
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style=3D"padding-top: 32px; text-align: center;">
+              <p style=3D"margin: 0 0 16px; color: #64748b; font-size: 14px=
+;">
+                <a href=3D"https://www.lavrox.com/docs" style=3D"color: #63=
+66F1; text-decoration: none; margin: 0 12px;">Documentation</a>
+                <span style=3D"color: #cbd5e1;">=E2=80=A2</span>
+                <a href=3D"https://www.lavrox.com/pricing" style=3D"color: =
+#6366F1; text-decoration: none; margin: 0 12px;">Pricing</a>
+                <span style=3D"color: #cbd5e1;">=E2=80=A2</span>
+                <a href=3D"https://www.lavrox.com/contact" style=3D"color: =
+#6366F1; text-decoration: none; margin: 0 12px;">Support</a>
+              </p>
+              <p style=3D"margin: 0 0 8px; color: #94a3b8; font-size: 12px;=
+">
+                =C2=A9 2026 Lavrox. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+
+--S3zZxOc0eBdOABSXSU8pnto3CpDjVnjl1lniIK7G--
+

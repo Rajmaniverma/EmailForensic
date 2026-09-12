@@ -19,20 +19,21 @@ if not api_key:
 client = Groq(api_key=api_key)
 
 GROQ_MODEL = "openai/gpt-oss-120b"
-file_path = "Requirement/Email.eml"
+# file_path = "Requirement/Email.eml"
 
-email_data = parse_email(file_path)
+
 
 
 # =========================================================
 # EXTRACT SUBJECT AND BODY
 # =========================================================
 
-subject = email_data.get("subject") or ""
-body = email_data.get("body") or ""
 
 
-def analyze_social_engineering(subject: str, body: str):
+def analyze_social_engineering(email_data):
+    subject = email_data.get("subject") or ""
+    body = email_data.get("body") or ""
+
 
     system_prompt = """
 You are a cybersecurity analyst specializing in
@@ -126,7 +127,6 @@ BODY:
     return SocialEngineeringAnalysis.model_validate(result)
 
 
-res=analyze_social_engineering(subject,body)
-print(res)
+
 
 

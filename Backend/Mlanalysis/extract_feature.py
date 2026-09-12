@@ -84,6 +84,9 @@ def extract_features(email_data):
     # -----------------------------------------------------
 
     body = email_data.get("body", "")
+    print("______________________________")
+    print(email_data)
+    print("_______________________________")
     subject = email_data.get("subject", "")
     sender = email_data.get("from", "")
     reply_to = email_data.get("reply_to", "")
@@ -329,4 +332,3 @@ def extract_features(email_data):
 
 
     return features
-

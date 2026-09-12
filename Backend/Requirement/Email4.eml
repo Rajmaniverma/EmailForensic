@@ -1,0 +1,56 @@
+From: Security Alert <security@paypa1-security.example>
+To: user@example.com
+Reply-To: verify-account@secure-check.example
+Return-Path: bounce@paypa1-security.example
+Subject: URGENT: Your Account Will Be Suspended - Verify Immediately
+Date: Thu, 10 Sep 2026 20:30:00 +0530
+Message-ID: <fake-phishing-001@example>
+MIME-Version: 1.0
+Content-Type: text/html; charset="UTF-8"
+Received: from suspicious.example (203.0.113.50) by mail.example.com;
+Authentication-Results: mail.example.com;
+spf=fail;
+dkim=fail;
+dmarc=fail
+
+<!DOCTYPE html>
+<html>
+<body>
+
+<h2>URGENT ACCOUNT SECURITY ALERT</h2>
+
+<p>Dear Customer,</p>
+
+<p>
+We detected unusual activity on your account.
+Your account will be permanently suspended within
+24 hours unless you complete the verification process.
+</p>
+
+<p>
+To prevent suspension, verify your account immediately:
+</p>
+
+<p>
+<a href="http://198.51.100.25/account/verify">
+Verify Your Account
+</a>
+</p>
+
+<p>
+You must provide your username, password, and OTP
+to complete the security verification.
+</p>
+
+<p>
+Failure to verify your account will result in permanent
+account suspension and loss of access.
+</p>
+
+<p>
+Regards,<br>
+Account Security Team
+</p>
+
+</body>
+</html>
