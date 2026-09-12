@@ -524,7 +524,7 @@ def google_callback(request: Request , db: Session = Depends(get_db)):
     )
 
     return RedirectResponse(
-    url="/gmail/messages",
+    url="https://email-forensic.vercel.app/dashboard",
     status_code=303
     )
 
