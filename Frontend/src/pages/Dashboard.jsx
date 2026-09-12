@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Dashboard.css";
 
-const API_URL = import.meta.env.BACKEND_API_URL;
+const API_URL =" https://emailforensic.onrender.com";
 
 function Dashboard() {
   const navigate = useNavigate();
