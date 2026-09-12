@@ -1,20 +1,18 @@
-import React from 'react'
-import PrivacyPolicy from './PrivacyPolicy'
 import { Routes, Route } from "react-router-dom";
-import Terms from './Terms'
+import Dashboard from "./pages/Dashboard";
+import Login from "./pages/Login";
 
-const App = () => {
+function App() {
   return (
-  <div>
-          <Routes>
-<Route path="/privacy-policy" element={<PrivacyPolicy />} />
-<Route path="/terms" element={<Terms />} />
-      </Routes>
-  </div>
-
-
-    
-  )
+    <Routes>
+      <Route path="/" element={<Login />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      {/* <Route path="/phishing" element={<Phishing />} />
+      <Route path="/social" element={<Social />} />
+      <Route path="/ip-tracing" element={<IPTracing />} />
+      <Route path="/analyzer" element={<Analyzer />} /> */}
+    </Routes>
+  );
 }
 
-export default App
+export default App;

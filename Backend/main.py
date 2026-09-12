@@ -43,9 +43,30 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# ============================================================
+# CORS CONFIGURATION
+# ============================================================
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://email-forensic.vercel.app",
+        "http://localhost:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ============================================================
+# SESSION CONFIGURATION
+# ============================================================
+
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("SECRET_KEY_VALUE")
+    secret_key=os.getenv("SECRET_KEY_VALUE"),
+    same_site="none",
+    https_only=True,
 )
 # ============================================================
 # OAUTH CONFIGURATION
@@ -53,10 +74,7 @@ app.add_middleware(
 
 # For local development only.
 # Remove/disable this in production.
-os.environ.setdefault(
-    "OAUTHLIB_INSECURE_TRANSPORT",
-    "1"
-)
+
 
 # app.include_router(Login_router, prefix="/login")
 # ============================================================
