@@ -248,5 +248,5 @@ Do not invent information that is not present in the email.
         "phishing_score": round(phishing_score, 2),
         "legitimate_score": round(legitimate_score, 2),
         # "explanation": Explanation ,
-        "ai_analysis": ai_analysis_data
+        "explanation": ai_analysis
     }
