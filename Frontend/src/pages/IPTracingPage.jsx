@@ -67,8 +67,9 @@ function IPTracingPage() {
           throw new Error("Message ID is missing.");
         }
 
+        // Cache-first: do not trigger another AI analysis from this page.
         const response = await fetch(
-          `${API_URL}/gmail/analyze/${encodeURIComponent(messageId)}`,
+          `${API_URL}/gmail/cached-analysis/${encodeURIComponent(messageId)}`,
           {
             method: "GET",
             headers: {
@@ -81,16 +82,18 @@ function IPTracingPage() {
 
         if (!response.ok) {
           throw new Error(
-            data?.detail || "Failed to fetch email analysis."
+            data?.detail || "Failed to fetch cached analysis."
           );
         }
 
-        if (!data.success) {
-          throw new Error("Email analysis failed.");
+        if (!data.success || !data.data) {
+          throw new Error(
+            "No cached analysis found. Analyze this email from the Analyzer first."
+          );
         }
 
-        // EXACT SAME email_data returned to Analyzer Dashboard
-        setEmailData(data.email_data);
+        // Unified response shape: data.data.email
+        setEmailData(data.data.email || null);
 
       } catch (err) {
         console.error("IP tracing error:", err);
@@ -176,6 +179,47 @@ function IPTracingPage() {
     geolocation?.timezone ||
     geolocation?.time_zone ||
     "Unknown";
+
+  const continent =
+    geolocation?.continent ||
+    geolocation?.continent_name ||
+    "Unknown";
+
+  const continentCode =
+    geolocation?.continent_code ||
+    geolocation?.continentCode ||
+    "N/A";
+
+  const countryCode =
+    geolocation?.country_code ||
+    geolocation?.countryCode ||
+    "N/A";
+
+  const district = geolocation?.district || "N/A";
+
+  const isp = geolocation?.isp || "Unknown";
+
+  const organization =
+    geolocation?.organization ||
+    geolocation?.org ||
+    "Unknown";
+
+  const asn = geolocation?.asn || "N/A";
+
+  const asName =
+    geolocation?.as_name ||
+    geolocation?.asName ||
+    "N/A";
+
+  const isProxy =
+    typeof geolocation?.is_proxy === "boolean"
+      ? geolocation.is_proxy
+      : null;
+
+  const isHosting =
+    typeof geolocation?.is_hosting === "boolean"
+      ? geolocation.is_hosting
+      : null;
 
   // =========================================================
   // LOADING
@@ -288,8 +332,7 @@ function IPTracingPage() {
           </h2>
 
           <p className="text-slate-500 mt-2">
-            Location extracted from the same forensic email data used by
-            the Analyzer Dashboard.
+            Location extracted from the cached forensic analysis. No new AI analysis is triggered here.
           </p>
         </div>
 
@@ -457,6 +500,59 @@ function IPTracingPage() {
             </div>
           )}
 
+        </div>
+
+        {/* NETWORK INTELLIGENCE */}
+        <div className="mt-6 bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
+                NETWORK INTELLIGENCE
+              </p>
+              <h3 className="text-xl font-bold text-slate-900 mt-1">
+                Provider & Infrastructure
+              </h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Additional intelligence returned by the IP intelligence service.
+              </p>
+            </div>
+
+            <div
+              className={`px-3 py-1.5 rounded-full text-xs font-bold ${
+                isProxy === true
+                  ? "bg-red-100 text-red-700"
+                  : isProxy === false
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              {isProxy === true
+                ? "⚠ Proxy detected"
+                : isProxy === false
+                ? "✓ No proxy detected"
+                : "Proxy status unknown"}
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <DetailRow label="Continent" value={`${continent} (${continentCode})`} />
+            <DetailRow label="Country Code" value={countryCode} />
+            <DetailRow label="District" value={district} />
+            <DetailRow label="ISP" value={isp} />
+            <DetailRow label="Organization" value={organization} />
+            <DetailRow label="ASN" value={asn} />
+            <DetailRow label="AS Name" value={asName} />
+            <DetailRow
+              label="Hosting"
+              value={
+                isHosting === true
+                  ? "Yes"
+                  : isHosting === false
+                  ? "No"
+                  : "Unknown"
+              }
+            />
+          </div>
         </div>
 
         {/* LOCATION DETAILS */}

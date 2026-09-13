@@ -133,12 +133,37 @@ const runAnalysis = async () => {
     return;
   }
 
+  let progressTimers = [];
+
   try {
+    setAnalysisProgress(5);
+
     setAnalysis((prev) => ({
       ...(prev || {}),
       loading: true,
       error: null,
     }));
+
+    // The backend currently returns one complete response, so the browser
+    // cannot know the exact server-side percentage. This is a visual
+    // staged progress indicator and reaches 100% only after completion.
+    const progressSteps = [
+      [15, 700],
+      [30, 1400],
+      [45, 2200],
+      [60, 3200],
+      [75, 4500],
+      [88, 6500],
+      [94, 9000],
+    ];
+
+    progressTimers = progressSteps.map(([value, delay]) =>
+      setTimeout(() => {
+        setAnalysisProgress((current) =>
+          current < value ? value : current
+        );
+      }, delay)
+    );
 
     const response = await fetch(
       `${API_URL}/gmail/full-analysis/${encodeURIComponent(messageId)}`,
@@ -152,9 +177,7 @@ const runAnalysis = async () => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
-        errorText || "Full analysis request failed"
-      );
+      throw new Error(errorText || "Full analysis request failed");
     }
 
     const result = await response.json();
@@ -165,13 +188,19 @@ const runAnalysis = async () => {
       throw new Error("Invalid analysis response");
     }
 
+    progressTimers.forEach(clearTimeout);
+    setAnalysisProgress(100);
+
     setAnalysis({
       ...result.data,
       loading: false,
       error: null,
     });
   } catch (err) {
+    progressTimers.forEach(clearTimeout);
     console.error("Full analysis error:", err);
+
+    setAnalysisProgress(0);
 
     setAnalysis((prev) => ({
       ...(prev || {}),
@@ -212,8 +241,10 @@ useEffect(() => {
 
       if (result.success && result.data) {
         setAnalysis(result.data);
+        setAnalysisProgress(100);
       } else {
         setAnalysis(null);
+        setAnalysisProgress(0);
       }
     } catch (error) {
       console.error("Cache fetch error:", error);
@@ -1579,9 +1610,29 @@ useEffect(() => {
                 </button>
 
                 {analysis?.loading && (
-                  <div className="flex items-center gap-2 text-xs text-[#5f6368]">
-                    <span className="w-2 h-2 rounded-full bg-[#1a73e8] animate-pulse" />
-                    Running all security checks...
+                  <div className="mt-3 rounded-xl border border-[#d2e3fc] bg-[#f8fbff] p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-[#3c4043]">
+                        Running security analysis
+                      </span>
+                      <span className="text-xs font-bold text-[#1a73e8]">
+                        {analysisProgress}%
+                      </span>
+                    </div>
+
+                    <div className="w-full h-2 rounded-full bg-[#e8eaed] overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-[#1a73e8] transition-all duration-500 ease-out"
+                        style={{ width: `${analysisProgress}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="w-2 h-2 rounded-full bg-[#1a73e8] animate-pulse" />
+                      <span className="text-[11px] text-[#5f6368]">
+                        Please wait while MailGuard checks the email...
+                      </span>
+                    </div>
                   </div>
                 )}
 
@@ -1651,29 +1702,28 @@ useEffect(() => {
 
                       {/* Run button */}
 
-                     <button
-  onClick={() => {
-    navigate(
-      `${tool.page}?message_id=${encodeURIComponent(messageId)}`
-    );
-  }}
-  className="
-    mt-3
-    px-4
-    py-2
-    rounded-lg
-    border
-    border-[#1e7e5a]
-    bg-[#e6f4ee]
-    text-[#1e7e5a]
-    text-xs
-    font-medium
-    hover:bg-[#d3ece0]
-    cursor-pointer
-  "
->
-  Open
-</button>
+                     {tool.key !== "analyze" && (
+                        <button
+                          onClick={() => {
+                            if (!analysis || analysis.loading) return;
+
+                            navigate(
+                              `${tool.page}?message_id=${encodeURIComponent(messageId)}`
+                            );
+                          }}
+                          disabled={!analysis || analysis.loading}
+                          className={`
+                            mt-3 px-4 py-2 rounded-lg border text-xs font-medium transition
+                            ${
+                              !analysis || analysis.loading
+                                ? "border-[#dadce0] bg-[#f1f3f4] text-[#9aa0a6] cursor-not-allowed"
+                                : "border-[#1e7e5a] bg-[#e6f4ee] text-[#1e7e5a] hover:bg-[#d3ece0] cursor-pointer"
+                            }
+                          `}
+                        >
+                          {analysis?.loading ? "Locked" : "Open"}
+                        </button>
+                      )}
 
                       {/* Error */}
 
@@ -1698,36 +1748,6 @@ useEffect(() => {
 
 
                       {/* Result */}
-
-                      {state &&
-                        !analysis?.loading && (
-
-                          <pre
-                            className="
-                              mt-3
-                              max-h-[220px]
-                              overflow-auto
-                              p-3
-                              rounded-lg
-                              bg-[#f8f9fa]
-                              border
-                              border-[#e5e7eb]
-                              text-[11px]
-                              leading-5
-                              text-[#202124]
-                              font-mono
-                              whitespace-pre-wrap
-                              break-words
-                            "
-                          >
-                            {JSON.stringify(
-                              state,
-                              null,
-                              2
-                            )}
-                          </pre>
-
-                        )}
 
                     </div>
 
