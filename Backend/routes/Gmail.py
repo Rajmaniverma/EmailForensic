@@ -956,156 +956,156 @@ def full_analysis(
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-@router.get("/analyze/{message_id}")
-def get_email_by_message_id(
-    message_id: str,
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Fetch complete Gmail email using Gmail message ID.
-    """
+# @router.get("/analyze/{message_id}")
+# def get_email_by_message_id(
+#     message_id: str,
+#     request: Request,
+#     db: Session = Depends(get_db)
+# ):
+#     """
+#     Fetch complete Gmail email using Gmail message ID.
+#     """
 
-    gmail, account = get_gmail_client(request, db)
+#     gmail, account = get_gmail_client(request, db)
 
-    try:
+#     try:
 
-        # Fetch complete Gmail message
-        gmail_msg = (
-            gmail.users()
-            .messages()
-            .get(
-                userId="me",
-                id=message_id,
-                format="full"
-            )
-            .execute()
-        )
+#         # Fetch complete Gmail message
+#         gmail_msg = (
+#             gmail.users()
+#             .messages()
+#             .get(
+#                 userId="me",
+#                 id=message_id,
+#                 format="full"
+#             )
+#             .execute()
+#         )
 
-        # Parse Gmail response
-        gmail_parsed = parse_gmail_message(gmail_msg)
+#         # Parse Gmail response
+#         gmail_parsed = parse_gmail_message(gmail_msg)
 
-        # Convert into your analyzer format
-        email_data = convert_gmail_to_email_data(
-            gmail_parsed,
-            gmail_msg
-        )
-        detection_engine_data = analyze_email(email_data)
+#         # Convert into your analyzer format
+#         email_data = convert_gmail_to_email_data(
+#             gmail_parsed,
+#             gmail_msg
+#         )
+#         detection_engine_data = analyze_email(email_data)
 
-        return {
-            "success": True,
-            "Detection_engine_data": detection_engine_data,
-            "email_data":email_data
-        }
+#         return {
+#             "success": True,
+#             "Detection_engine_data": detection_engine_data,
+#             "email_data":email_data
+#         }
 
-    except Exception as e:
+#     except Exception as e:
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch email: {str(e)}"
-        )
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Failed to fetch email: {str(e)}"
+#         )
 
-@router.get("/Phising/{message_id}")
-def get_email_by_message_id(
-    message_id: str,
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Fetch complete Gmail email using Gmail message ID.
-    """
+# @router.get("/Phising/{message_id}")
+# def get_email_by_message_id(
+#     message_id: str,
+#     request: Request,
+#     db: Session = Depends(get_db)
+# ):
+#     """
+#     Fetch complete Gmail email using Gmail message ID.
+#     """
 
-    gmail, account = get_gmail_client(request, db)
+#     gmail, account = get_gmail_client(request, db)
 
-    try:
+#     try:
 
-        # Fetch complete Gmail message
-        gmail_msg = (
-            gmail.users()
-            .messages()
-            .get(
-                userId="me",
-                id=message_id,
-                format="full"
-            )
-            .execute()
-        )
+#         # Fetch complete Gmail message
+#         gmail_msg = (
+#             gmail.users()
+#             .messages()
+#             .get(
+#                 userId="me",
+#                 id=message_id,
+#                 format="full"
+#             )
+#             .execute()
+#         )
 
-        # Parse Gmail response
-        gmail_parsed = parse_gmail_message(gmail_msg)
+#         # Parse Gmail response
+#         gmail_parsed = parse_gmail_message(gmail_msg)
 
-        # Convert into your analyzer format
-        email_data = convert_gmail_to_email_data(
-            gmail_parsed,
-            gmail_msg
-        )
-        Phising= Phising_email(email_data)
+#         # Convert into your analyzer format
+#         email_data = convert_gmail_to_email_data(
+#             gmail_parsed,
+#             gmail_msg
+#         )
+#         Phising= Phising_email(email_data)
 
-        return {
-            "success": True,
-            "Phising": Phising
-        }
+#         return {
+#             "success": True,
+#             "Phising": Phising
+#         }
 
-    except Exception as e:
+#     except Exception as e:
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch email: {str(e)}"
-        )
-@router.get("/Social/{message_id}")
-def get_email_by_message_id(
-    message_id: str,
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Fetch complete Gmail email and run
-    social engineering analysis.
-    """
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Failed to fetch email: {str(e)}"
+#         )
+# @router.get("/Social/{message_id}")
+# def get_email_by_message_id(
+#     message_id: str,
+#     request: Request,
+#     db: Session = Depends(get_db)
+# ):
+#     """
+#     Fetch complete Gmail email and run
+#     social engineering analysis.
+#     """
 
-    gmail, account = get_gmail_client(request, db)
+#     gmail, account = get_gmail_client(request, db)
 
-    try:
+#     try:
 
-        # 1. Fetch complete Gmail message
-        gmail_msg = (
-            gmail.users()
-            .messages()
-            .get(
-                userId="me",
-                id=message_id,
-                format="full"
-            )
-            .execute()
-        )
+#         # 1. Fetch complete Gmail message
+#         gmail_msg = (
+#             gmail.users()
+#             .messages()
+#             .get(
+#                 userId="me",
+#                 id=message_id,
+#                 format="full"
+#             )
+#             .execute()
+#         )
 
-        # 2. Parse Gmail response
-        gmail_parsed = parse_gmail_message(gmail_msg)
+#         # 2. Parse Gmail response
+#         gmail_parsed = parse_gmail_message(gmail_msg)
 
-        # 3. Convert Gmail data into email_data
-        email_data = convert_gmail_to_email_data(
-            gmail_parsed,
-            gmail_msg
-        )
+#         # 3. Convert Gmail data into email_data
+#         email_data = convert_gmail_to_email_data(
+#             gmail_parsed,
+#             gmail_msg
+#         )
 
-        # 4. Run Social Engineering analysis
-        social_analysis = analyze_social_engineering(
-            email_data
-        )
+#         # 4. Run Social Engineering analysis
+#         social_analysis = analyze_social_engineering(
+#             email_data
+#         )
 
-        # 5. Return result to frontend
-        return {
-            "success": True,
-            "message_id": message_id,
-            "social_engineering": social_analysis.model_dump()
-        }
+#         # 5. Return result to frontend
+#         return {
+#             "success": True,
+#             "message_id": message_id,
+#             "social_engineering": social_analysis.model_dump()
+#         }
 
-    except Exception as e:
+#     except Exception as e:
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch/analyze email: {str(e)}"
-        )
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Failed to fetch/analyze email: {str(e)}"
+#         )
 def get_gmail_client(
     request: Request,
     db: Session
