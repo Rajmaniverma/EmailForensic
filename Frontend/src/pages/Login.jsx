@@ -306,8 +306,10 @@ function Login() {
               text-slate-500
             "
           >
+            Before clicking read <a href="https://email-forensic.vercel.app/privacy-policy">PrivacyPolicy</a> and <a href="https://email-forensic.vercel.app/terms">Terms and conditions</a>
             By continuing, you allow MailGuard to securely
             access your Gmail account for email analysis.
+            
           </p>
 
 
