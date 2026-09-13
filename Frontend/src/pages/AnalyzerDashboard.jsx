@@ -1,403 +1,225 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 const API_URL = "https://emailforensic.onrender.com";
 
+// =====================================================
+// ANALYSIS TOOLS
+// =====================================================
 
-// ============================================================
-// REUSABLE COMPONENTS
-// ============================================================
+const ANALYSIS_TOOLS = [
+  {
+    key: "analyze",
+    label: "Email Analyzer",
+    description: "General forensic analysis of this email.",
+    icon: "🔍",
+    page: "/analyzer",
+  },
+  {
+    key: "phishing",
+    label: "Phishing Detection",
+    description: "Check this email for phishing indicators.",
+    icon: "🎣",
+    page: "/phishing",
+  },
+  {
+    key: "social",
+    label: "Social Engineering",
+    description: "Look for manipulation and impersonation tactics.",
+    icon: "👥",
+    page: "/social",
+  },
+  {
+    key: "ip",
+    label: "IP Tracing",
+    description: "Trace the originating IP and network information.",
+    icon: "🌐",
+    page: "/ip-tracing",
+  },
+];
+// =====================================================
+// MAIN COMPONENT
+// =====================================================
 
-function SectionCard({ children, className = "" }) {
-  return (
-    <section
-      className={`bg-white border border-[#dbe7f5] rounded-2xl shadow-sm ${className}`}
-    >
-      {children}
-    </section>
-  );
-}
-
-
-function SectionHeader({ icon, title, description }) {
-  return (
-    <div className="px-5 py-5 border-b border-[#e5edf7]">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-[#e8f1ff] flex items-center justify-center text-lg shrink-0">
-          {icon}
-        </div>
-
-        <div>
-          <h2 className="text-base font-semibold text-[#12345b]">
-            {title}
-          </h2>
-
-          {description && (
-            <p className="mt-1 text-xs leading-5 text-[#6b7c93]">
-              {description}
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-function InfoItem({
-  label,
-  value,
-  mono = false,
-  fullWidth = false,
-}) {
-  return (
-    <div className={fullWidth ? "sm:col-span-2" : ""}>
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#7b8da6]">
-        {label}
-      </p>
-
-      <p
-        className={`mt-1.5 text-sm text-[#233b5d] break-words ${
-          mono ? "font-mono text-xs" : ""
-        }`}
-      >
-        {value === null ||
-        value === undefined ||
-        value === ""
-          ? "Not available"
-          : String(value)}
-      </p>
-    </div>
-  );
-}
-
-
-function StatusBadge({ value }) {
-  const normalized = String(value || "")
-    .toLowerCase()
-    .trim();
-
-  let classes =
-    "bg-[#f4f7fb] text-[#63748a] border-[#dce5ef]";
-
-  if (normalized === "pass") {
-    classes =
-      "bg-[#eaf7ef] text-[#188038] border-[#ccebd7]";
-  }
-
-  if (
-    normalized === "fail" ||
-    normalized === "softfail" ||
-    normalized === "permerror" ||
-    normalized === "temperror"
-  ) {
-    classes =
-      "bg-[#fcebea] text-[#c5221f] border-[#f3c8c6]";
-  }
-
-  if (
-    normalized === "neutral" ||
-    normalized === "none"
-  ) {
-    classes =
-      "bg-[#f4f7fb] text-[#63748a] border-[#dce5ef]";
-  }
-
-  return (
-    <span
-      className={`inline-flex px-3 py-1 rounded-full border text-[11px] font-semibold uppercase ${classes}`}
-    >
-      {value || "N/A"}
-    </span>
-  );
-}
-
-
-function BooleanBadge({ value }) {
-  if (value === true) {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#fff0ef] border border-[#f5cecc] text-[#c5221f] text-[11px] font-semibold">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#d93025]" />
-        Detected
-      </span>
-    );
-  }
-
-  if (value === false) {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#edf8f1] border border-[#cfe9d7] text-[#188038] text-[11px] font-semibold">
-        <span>✓</span>
-        No
-      </span>
-    );
-  }
-
-  return (
-    <span className="text-xs font-medium text-[#53657d]">
-      {String(value)}
-    </span>
-  );
-}
-
-
-function ScoreCircle({
-  score,
-  title,
-  description,
-  type = "threat",
-}) {
-  const numericScore = Math.min(
-    Math.max(Number(score) || 0, 0),
-    100
-  );
-
-  const radius = 43;
-  const circumference = 2 * Math.PI * radius;
-
-  const offset =
-    circumference -
-    (numericScore / 100) * circumference;
-
-  const isThreat = type === "threat";
-
-  return (
-    <div className="flex items-center gap-5">
-
-      <div className="relative w-28 h-28 shrink-0">
-
-        <svg
-          viewBox="0 0 110 110"
-          className="w-28 h-28 -rotate-90"
-        >
-          <circle
-            cx="55"
-            cy="55"
-            r={radius}
-            fill="none"
-            strokeWidth="9"
-            className="stroke-[#eaf1f9]"
-          />
-
-          <circle
-            cx="55"
-            cy="55"
-            r={radius}
-            fill="none"
-            strokeWidth="9"
-            strokeLinecap="round"
-            className={
-              isThreat
-                ? numericScore >= 70
-                  ? "stroke-[#dc2626]"
-                  : numericScore >= 40
-                  ? "stroke-[#f59e0b]"
-                  : "stroke-[#2563eb]"
-                : numericScore >= 70
-                ? "stroke-[#16a34a]"
-                : "stroke-[#4f8fe8]"
-            }
-            style={{
-              strokeDasharray: circumference,
-              strokeDashoffset: offset,
-            }}
-          />
-        </svg>
-
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold text-[#12345b]">
-            {numericScore}
-          </span>
-
-          <span className="text-[9px] text-[#7b8da6]">
-            / 100
-          </span>
-        </div>
-
-      </div>
-
-      <div>
-        <p className="text-sm font-semibold text-[#183b67]">
-          {title}
-        </p>
-
-        <p className="mt-1 text-xs leading-5 text-[#6b7c93]">
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-
-function FeatureCard({ label, value }) {
-  return (
-    <div className="rounded-xl border border-[#e1eaf4] bg-[#f9fbfe] p-4 hover:border-[#bfd5f2] transition">
-      <p className="text-[11px] leading-4 text-[#71839b]">
-        {label}
-      </p>
-
-      <p className="mt-2 text-xl font-semibold text-[#173b66]">
-        {String(value ?? 0)}
-      </p>
-    </div>
-  );
-}
-
-
-function AuthenticationCard({
-  title,
-  description,
-  values,
-}) {
-  const list = Array.isArray(values)
-    ? values
-    : values
-      ? [values]
-      : ["none"];
-
-  return (
-    <div className="rounded-xl border border-[#dce7f4] bg-[#f9fbfe] p-4">
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-[#173b66]">
-            {title}
-          </h3>
-
-          <p className="mt-0.5 text-[11px] text-[#7b8da6]">
-            {description}
-          </p>
-        </div>
-
-        <div className="w-9 h-9 rounded-lg bg-[#e8f1ff] flex items-center justify-center text-sm">
-          ✓
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {list.map((item, index) => (
-          <StatusBadge
-            key={`${item}-${index}`}
-            value={item}
-          />
-        ))}
-      </div>
-
-    </div>
-  );
-}
-
-
-function AnalysisRow({ label, value }) {
-  return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-xl border border-[#e3ebf5] bg-[#fbfcfe]">
-      <span className="text-xs text-[#536981]">
-        {label}
-      </span>
-
-      <BooleanBadge value={value} />
-    </div>
-  );
-}
-
-
-function NavigationCard({
-  icon,
-  title,
-  description,
-  buttonText,
-  onClick,
-}) {
-  return (
-    <div className="group bg-white border border-[#dbe7f5] rounded-2xl p-5 hover:border-[#8db6eb] hover:shadow-md transition-all">
-
-      <div className="flex items-start justify-between">
-
-        <div className="w-11 h-11 rounded-xl bg-[#eaf2ff] flex items-center justify-center text-xl">
-          {icon}
-        </div>
-
-        <span className="text-xl text-[#8aa0ba] group-hover:text-[#2563eb] transition">
-          →
-        </span>
-
-      </div>
-
-      <h3 className="mt-4 text-sm font-semibold text-[#173b66]">
-        {title}
-      </h3>
-
-      <p className="mt-2 text-xs leading-5 text-[#6b7c93]">
-        {description}
-      </p>
-
-      <button
-        onClick={onClick}
-        className="
-          mt-4
-          px-3.5
-          py-2
-          rounded-lg
-          bg-[#e8f1ff]
-          border
-          border-[#c7dbf5]
-          text-[#2563eb]
-          text-xs
-          font-semibold
-          hover:bg-[#dbe9fc]
-          cursor-pointer
-          transition
-        "
-      >
-        {buttonText} →
-      </button>
-
-    </div>
-  );
-}
-
-
-// ============================================================
-// MAIN ANALYZER DASHBOARD
-// ============================================================
-
-export default function AnalyzerDashboard() {
+function EmailDetail() {
+  const { messageId } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-
-  const messageId = searchParams.get("message_id");
-
-  const [result, setResult] = useState(null);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+const [analysis, setAnalysis] = useState(null);
+  const [email, setEmail] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(null);
 
-  // ==========================================================
-  // FETCH ANALYSIS
-  // ==========================================================
+  // Per-tool analysis state
 
-  // ==========================================================
-  // CACHE-FIRST ANALYSIS
-  // ==========================================================
 
-  const fetchCachedAnalysis = async () => {
-    if (!messageId) {
-      setError("Message ID is missing.");
-      setLoading(false);
-      return;
+  // =====================================================
+  // TOKEN
+  // =====================================================
+
+  const getToken = () => {
+    return localStorage.getItem("access_token");
+  };
+
+  // =====================================================
+  // LOAD EMAIL
+  // =====================================================
+
+  useEffect(() => {
+    const loadEmail = async () => {
+      const token = getToken();
+
+      if (!token) {
+        navigate("/", { replace: true });
+        return;
+      }
+
+      if (!messageId) {
+        setError("No Gmail message ID was provided.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `${API_URL}/gmail/message/${encodeURIComponent(messageId)}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch this email");
+        }
+
+        const data = await response.json();
+
+        console.log("Gmail message detail:", data);
+
+        // Backend returns:
+        // {
+        //   success: true,
+        //   email: {...}
+        // }
+
+        setEmail(data.email || data.message || data);
+      } catch (err) {
+        console.error("Email detail error:", err);
+        setError("This email couldn't be loaded.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadEmail();
+  }, [messageId, navigate]);
+
+  // =====================================================
+  // RUN ANALYSIS
+  // =====================================================
+
+const runAnalysis = async () => {
+  const token = getToken();
+
+  if (!token) {
+    navigate("/", { replace: true });
+    return;
+  }
+
+  if (!messageId) {
+    setError("No Gmail message ID was provided.");
+    return;
+  }
+
+  let progressTimers = [];
+
+  try {
+    setAnalysisProgress(5);
+
+    setAnalysis((prev) => ({
+      ...(prev || {}),
+      loading: true,
+      error: null,
+    }));
+
+    // The backend currently returns one complete response, so the browser
+    // cannot know the exact server-side percentage. This is a visual
+    // staged progress indicator and reaches 100% only after completion.
+    const progressSteps = [
+      [15, 700],
+      [30, 1400],
+      [45, 2200],
+      [60, 3200],
+      [75, 4500],
+      [88, 6500],
+      [94, 9000],
+    ];
+
+    progressTimers = progressSteps.map(([value, delay]) =>
+      setTimeout(() => {
+        setAnalysisProgress((current) =>
+          current < value ? value : current
+        );
+      }, delay)
+    );
+
+    const response = await fetch(
+      `${API_URL}/gmail/full-analysis/${encodeURIComponent(messageId)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || "Full analysis request failed");
     }
 
-    const token = localStorage.getItem("access_token");
+    const result = await response.json();
 
-    if (!token) {
-      setError("Authentication token is missing.");
-      setLoading(false);
+    console.log("Full Analysis:", result);
+
+    if (!result.success || !result.data) {
+      throw new Error("Invalid analysis response");
+    }
+
+    progressTimers.forEach(clearTimeout);
+    setAnalysisProgress(100);
+
+    setAnalysis({
+      ...result.data,
+      loading: false,
+      error: null,
+    });
+  } catch (err) {
+    progressTimers.forEach(clearTimeout);
+    console.error("Full analysis error:", err);
+
+    setAnalysisProgress(0);
+
+    setAnalysis((prev) => ({
+      ...(prev || {}),
+      loading: false,
+      error: err.message || "Analysis failed.",
+    }));
+  }
+};
+
+useEffect(() => {
+  const fetchCachedAnalysis = async () => {
+    const token = getToken();
+
+    if (!token || !messageId) {
       return;
     }
 
     try {
-      setLoading(true);
-      setError("");
-
       const response = await fetch(
         `${API_URL}/gmail/cached-analysis/${encodeURIComponent(messageId)}`,
         {
@@ -408,334 +230,185 @@ export default function AnalyzerDashboard() {
         }
       );
 
-      const data = await response.json();
-
-      console.log("Cached analysis response:", data);
-
-      // Cache miss is NOT an error.
-      if (!response.ok || !data.success || !data.data) {
-        setResult(null);
-        return false;
+      if (!response.ok) {
+        console.log("No cached analysis yet");
+        setAnalysis(null);
+        return;
       }
 
-      setResult(data.data);
-      return true;
-    } catch (err) {
-      console.error("Cache fetch error:", err);
-      setResult(null);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
+      const result = await response.json();
 
-  // ==========================================================
-  // RUN COMPLETE ANALYSIS
-  // ==========================================================
+      console.log("Cached Analysis:", result);
 
-  const runFullAnalysis = async () => {
-    if (!messageId) {
-      setError("Message ID is missing.");
-      return;
-    }
-
-    const token = localStorage.getItem("access_token");
-
-    if (!token) {
-      setError("Authentication token is missing.");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError("");
-
-      const response = await fetch(
-        `${API_URL}/gmail/full-analysis/${encodeURIComponent(messageId)}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      console.log("Full analysis response:", data);
-
-      if (!response.ok || !data.success || !data.data) {
-        throw new Error(
-          data?.detail || "Failed to generate email analysis."
-        );
+      if (result.success && result.data) {
+        setAnalysis(result.data);
+        setAnalysisProgress(100);
+      } else {
+        setAnalysis(null);
+        setAnalysisProgress(0);
       }
-
-      // /full-analysis returns the complete object.
-      // The backend also stores this object in TTLCache.
-      setResult(data.data);
-    } catch (err) {
-      console.error("Full analysis error:", err);
-      setError(
-        err.message || "Unable to generate email analysis."
-      );
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error("Cache fetch error:", error);
+      setAnalysis(null);
     }
   };
 
-  // Cache-first:
-  // 1. Open dashboard
-  // 2. Check temporary backend cache
-  // 3. If cache exists, display it immediately
-  // 4. If cache does not exist, stay on the dashboard and show Analyze button
-  useEffect(() => {
-    fetchCachedAnalysis();
-  }, [messageId]);
+  fetchCachedAnalysis();
+}, [messageId]);
 
-  // ==========================================================
-  // DATA
-  // ==========================================================
-
-  // Unified cache/full-analysis response:
-  // {
-  //   message_id,
-  //   email,
-  //   detection_engine,
-  //   phishing,
-  //   social,
-  //   ip_tracing
-  // }
-  const detection =
-    result?.detection_engine ||
-    result?.Detection_engine_data ||
-    {};
-
-  const features =
-    detection?.features || {};
-
-  const ai =
-    detection?.ai_analysis || {};
-
-  const email =
-    result?.email ||
-    result?.email_data ||
-    {};
-
-  const authentication =
-    email?.authentication || {};
-
-  const subjectAnalysis =
-    ai?.subject_analysis || {};
-
-  const bodyAnalysis =
-    ai?.body_analysis || {};
-
-
-  const riskLevel = String(
-    ai?.risk_level || "unknown"
-  ).toLowerCase();
-
-
-  const riskInfo = useMemo(() => {
-    if (riskLevel === "high") {
-      return {
-        label: "HIGH RISK",
-        description:
-          "Multiple suspicious characteristics were detected in this email.",
-        icon: "⚠",
-        bg: "bg-[#fff0ef]",
-        border: "border-[#f4cbc8]",
-        text: "text-[#c5221f]",
-      };
-    }
-
-    if (riskLevel === "medium") {
-      return {
-        label: "MEDIUM RISK",
-        description:
-          "Suspicious characteristics were detected and further investigation is recommended.",
-        icon: "!",
-        bg: "bg-[#eef5ff]",
-        border: "border-[#c7dbf5]",
-        text: "text-[#2563eb]",
-      };
-    }
-
-    if (riskLevel === "low") {
-      return {
-        label: "LOW RISK",
-        description:
-          "The analysis detected relatively few suspicious characteristics.",
-        icon: "✓",
-        bg: "bg-[#edf8f1]",
-        border: "border-[#cce8d5]",
-        text: "text-[#188038]",
-      };
-    }
-
-    return {
-      label: "UNKNOWN",
-      description:
-        "The backend did not return a recognized risk level.",
-      icon: "?",
-      bg: "bg-[#f4f7fb]",
-      border: "border-[#dce5ef]",
-      text: "text-[#63748a]",
-    };
-  }, [riskLevel]);
-
-
-  const featureLabels = {
-    url_count: "URLs detected",
-    ip_url_count: "IP-based URLs",
-    suspicious_tld_count: "Suspicious TLDs",
-    long_url_count: "Long URLs",
-    urgent_count: "Urgency indicators",
-    credential_count: "Credential indicators",
-    threat_count: "Threat indicators",
-    reply_to_mismatch: "Reply-To mismatch",
-    attachment_count: "Attachments",
-    suspicious_attachment_count:
-      "Suspicious attachments",
-    text_length: "Text length",
-    exclamation_count: "Exclamation marks",
-  };
-
-
-  const aiLabels = {
-    urgency: "Urgency",
-    threats: "Threats",
-    financial_request: "Financial request",
-    credential_request: "Credential request",
-    unusual_language: "Unusual language",
-    fear: "Fear",
-    pressure: "Pressure",
-    password_request: "Password request",
-    otp_request: "OTP request",
-    fake_verification: "Fake verification",
-    impersonation: "Impersonation",
-    social_engineering: "Social engineering",
-    suspicious_instructions:
-      "Suspicious instructions",
-    phishing_indicator:
-      "Phishing indicator",
-  };
-
-
-  const hasAnalysis = Boolean(
-    result?.detection_engine ||
-    result?.Detection_engine_data ||
-    result?.phishing ||
-    result?.social ||
-    result?.ip_tracing
-  );
-
-  const cacheSource =
-    result && hasAnalysis
-      ? "Temporary cache / current analysis"
-      : "No cached analysis";
-
-  // ==========================================================
+// =====================================================
   // LOADING
-  // ==========================================================
+  // =====================================================
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f4f8fd] flex items-center justify-center">
+<div className="h-screen w-full flex flex-col items-center justify-center bg-[#f6f8fc] text-[#5f6368]">
 
-        <div className="text-center">
+  {/* Animated Email Icon */}
+  <div className="relative mb-5">
 
-          <div className="relative w-16 h-16 mx-auto">
+    {/* Soft pulse */}
+    <div className="absolute inset-0 rounded-full bg-[#1a73e8]/10 animate-ping" />
 
-            <div className="absolute inset-0 rounded-full border-4 border-[#dceaff]" />
+    {/* Envelope */}
+    <div className="relative w-14 h-14 rounded-2xl bg-white shadow-md flex items-center justify-center">
+      <svg
+        className="w-7 h-7 text-[#1a73e8]"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
+        <rect
+          x="3"
+          y="5"
+          width="18"
+          height="14"
+          rx="2"
+        />
 
-            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[#2563eb] animate-spin" />
+        <path
+          d="M3.5 7L12 13L20.5 7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  </div>
 
-            <div className="absolute inset-0 flex items-center justify-center">
-              🛡️
-            </div>
+  {/* Text */}
+  <p className="text-sm font-medium text-[#3c4043]">
+    Opening email
+  </p>
 
-          </div>
+  {/* Animated dots */}
+  <div className="flex gap-1 mt-2">
+    <span className="w-1.5 h-1.5 rounded-full bg-[#1a73e8] animate-bounce [animation-delay:-0.3s]" />
+    <span className="w-1.5 h-1.5 rounded-full bg-[#1a73e8] animate-bounce [animation-delay:-0.15s]" />
+    <span className="w-1.5 h-1.5 rounded-full bg-[#1a73e8] animate-bounce" />
+  </div>
 
-          <h2 className="mt-5 text-sm font-semibold text-[#173b66]">
-            Loading Security Analysis
-          </h2>
-
-          <p className="mt-1 text-xs text-[#71839b]">
-            Checking the temporary analysis cache...
-          </p>
-
-        </div>
-
-      </div>
+</div>
     );
   }
 
+  // =====================================================
+  // EMAIL DATA
+  // =====================================================
 
-  // ==========================================================
-  // ERROR
-  // ==========================================================
+  const subject =
+    email?.subject ||
+    email?.name ||
+    "(No subject)";
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-[#f4f8fd] flex items-center justify-center px-4">
+  const from =
+    email?.from ||
+    email?.sender ||
+    "Unknown sender";
 
-        <div className="w-full max-w-md bg-white border border-[#dbe7f5] rounded-2xl shadow-sm p-7 text-center">
+  const senderName =
+    email?.sender_name ||
+    email?.from_name ||
+    extractSenderName(from);
 
-          <div className="w-14 h-14 mx-auto rounded-full bg-[#eef5ff] flex items-center justify-center text-xl text-[#2563eb]">
-            !
-          </div>
+  const senderEmail =
+    email?.sender_email ||
+    extractEmail(from);
 
-          <h2 className="mt-4 text-lg font-semibold text-[#173b66]">
-            Unable to load analysis
-          </h2>
+  const date =
+    email?.date ||
+    "";
 
-          <p className="mt-2 text-sm leading-6 text-[#6b7c93]">
-            {error}
-          </p>
+  // Plain-text fallback
+  const body =
+    email?.body ||
+    email?.plain_text ||
+    email?.text ||
+    email?.snippet ||
+    "";
 
-          <div className="mt-6 flex justify-center gap-3">
+  // =====================================================
+  // ORIGINAL HTML EMAIL
+  // =====================================================
 
-            <button
-              onClick={() => navigate(-1)}
-              className="px-4 py-2.5 rounded-lg border border-[#d5e0ec] bg-white text-sm font-medium text-[#405572] hover:bg-[#f5f8fc]"
-            >
-              ← Back
-            </button>
+  const htmlBody =
+    email?.html_body ||
+    email?.html ||
+    email?.body_html ||
+    "";
 
-            <button
-              onClick={fetchCachedAnalysis}
-              className="px-4 py-2.5 rounded-lg bg-[#2563eb] text-white text-sm font-medium hover:bg-[#1d4ed8]"
-            >
-              Try Again
-            </button>
+  const attachments = Array.isArray(email?.attachments)
+    ? email.attachments
+    : [];
 
-          </div>
-
-        </div>
-
-      </div>
-    );
-  }
-
-
-  // ==========================================================
-  // DASHBOARD
-  // ==========================================================
+  // =====================================================
+  // RENDER
+  // =====================================================
 
   return (
-    <div className="min-h-screen bg-[#f4f8fd] text-[#173b66]">
+    <div
+      className="
+        h-screen
+        w-full
+        flex
+        flex-col
+        bg-[#f6f8fc]
+        text-[#202124]
+        font-sans
+        overflow-hidden
+      "
+    >
 
-      {/* ======================================================
-          TOP NAVIGATION
-      ======================================================= */}
+      {/* =================================================
+          GMAIL TOP HEADER
+      ================================================== */}
 
-      <header className="sticky top-0 z-30 h-16 bg-white border-b border-[#dbe7f5]">
+      <header
+        className="
+          h-[64px]
+          min-h-[64px]
+          flex
+          items-center
+          px-4
+          bg-[#f6f8fc]
+        "
+      >
 
-        <div className="h-full max-w-[1500px] mx-auto px-4 md:px-6 flex items-center">
+        {/* ---------------------------------------------
+            MENU + GMAIL LOGO
+        ---------------------------------------------- */}
+
+        <div
+          className="
+            flex
+            items-center
+            gap-3
+            w-[250px]
+            shrink-0
+          "
+        >
 
           <button
-            onClick={() => navigate(-1)}
             className="
               w-10
               h-10
@@ -743,68 +416,170 @@ export default function AnalyzerDashboard() {
               flex
               items-center
               justify-center
-              text-[#60758f]
-              hover:bg-[#eef4fb]
-              hover:text-[#2563eb]
+              border-none
+              bg-transparent
+              text-[#5f6368]
+              text-xl
               cursor-pointer
-              transition
+              hover:bg-[#e8eaed]
             "
-            title="Back to email"
+            aria-label="Main menu"
           >
-            ←
+            ☰
           </button>
 
+          {/* Gmail-style logo */}
 
-          <div className="ml-3 flex items-center gap-3">
+          <div className="flex items-center gap-2">
 
-            <div className="w-9 h-9 rounded-xl bg-[#2563eb] flex items-center justify-center text-white">
-              🛡
+            <div
+              className="
+                text-3xl
+                font-bold
+                leading-none
+                bg-gradient-to-r
+                from-[#4285f4]
+                via-[#ea4335]
+                to-[#34a853]
+                bg-clip-text
+                text-transparent
+              "
+            >
+              M
             </div>
 
-            <div>
-              <h1 className="text-sm font-bold text-[#173b66]">
-                MailGuard
-              </h1>
-
-              <p className="text-[10px] text-[#71839b]">
-                Email Security Analyzer
-              </p>
-            </div>
+            <span
+              className="
+                text-[22px]
+                text-[#3c4043]
+                font-normal
+              "
+            >
+              Gmail
+            </span>
 
           </div>
 
+        </div>
 
-          <div className="ml-auto flex items-center gap-3">
 
-            <div className="hidden sm:block text-right">
-              <p className="text-[10px] uppercase tracking-wider text-[#8293a9]">
-                Analysis ID
-              </p>
+        {/* ---------------------------------------------
+            SEARCH
+        ---------------------------------------------- */}
 
-              <p className="max-w-[220px] truncate font-mono text-[10px] text-[#526983]">
-                {messageId}
-              </p>
-            </div>
+        <div
+          className="
+            hidden
+            md:flex
+            flex-1
+            max-w-[820px]
+            h-[48px]
+            items-center
+            px-4
+            bg-[#e9eef6]
+            rounded-full
+          "
+        >
 
-            <button
-              onClick={fetchCachedAnalysis}
-              className="
-                px-3
-                py-2
-                rounded-lg
-                border
-                border-[#d4e1ef]
-                bg-white
-                text-xs
-                font-semibold
-                text-[#2563eb]
-                hover:bg-[#f3f7fc]
-                cursor-pointer
-              "
-            >
-              ↻ Refresh Cache
-            </button>
+          <span className="text-[#5f6368] text-xl">
+            🔍
+          </span>
 
+          <input
+            type="text"
+            placeholder="Search mail"
+            className="
+              flex-1
+              ml-3
+              bg-transparent
+              outline-none
+              border-none
+              text-sm
+              text-[#202124]
+              placeholder:text-[#5f6368]
+            "
+          />
+
+          <button
+            className="
+              w-9
+              h-9
+              flex
+              items-center
+              justify-center
+              rounded-full
+              border-none
+              bg-transparent
+              text-[#5f6368]
+              hover:bg-[#dfe5ee]
+              cursor-pointer
+            "
+            title="Search options"
+          >
+            ☷
+          </button>
+
+        </div>
+
+
+        {/* ---------------------------------------------
+            RIGHT HEADER
+        ---------------------------------------------- */}
+
+        <div
+          className="
+            ml-auto
+            flex
+            items-center
+            gap-1
+          "
+        >
+
+          <button
+            className={headerButtonClass}
+            title="Help"
+          >
+            ?
+          </button>
+
+          <button
+            className={headerButtonClass}
+            title="Settings"
+          >
+            ⚙
+          </button>
+
+          <button
+            className={headerButtonClass}
+            title="Google apps"
+          >
+            ✦
+          </button>
+
+          <button
+            className={headerButtonClass}
+            title="More"
+          >
+            ⋮⋮
+          </button>
+
+          <div
+            className="
+              ml-2
+              w-9
+              h-9
+              rounded-full
+              bg-[#137333]
+              text-white
+              flex
+              items-center
+              justify-center
+              font-medium
+              border-2
+              border-[#aecbfa]
+            "
+          >
+            R
           </div>
 
         </div>
@@ -812,1042 +587,1380 @@ export default function AnalyzerDashboard() {
       </header>
 
 
-      {/* ======================================================
-          MAIN
-      ======================================================= */}
+      {/* =================================================
+          MAIN GMAIL AREA
+      ================================================== */}
 
-      <main className="max-w-[1500px] mx-auto px-4 md:px-6 py-7">
+      <div
+        className="
+          flex-1
+          min-h-0
+          flex
+        "
+      >
+
+        {/* =================================================
+            LEFT SIDEBAR
+        ================================================== */}
+
+        <aside
+          className="
+            hidden
+            lg:flex
+            w-[250px]
+            shrink-0
+            flex-col
+            bg-[#f6f8fc]
+            px-2
+            overflow-y-auto
+          "
+        >
+
+          {/* Compose */}
+
+          <button
+            onClick={() => navigate(`/analyzer?message_id=${encodeURIComponent(messageId)}`)}
+            className="
+              w-fit
+              min-w-[150px]
+              h-[56px]
+              px-5
+              mb-4
+              flex
+              items-center
+              gap-3
+              rounded-2xl
+              border-none
+              bg-[#c2e7ff]
+              text-[#001d35]
+              text-sm
+              font-medium
+              cursor-pointer
+              hover:shadow-md
+              transition-shadow
+            "
+          >
+            <span className="text-xl">
+              ✎
+            </span>
+
+            Compose
+          </button>
 
 
-        {/* ====================================================
-            TITLE
-        ===================================================== */}
+          {/* Inbox */}
 
-        <div className="mb-6">
+          <button
+            className="
+              h-9
+              w-full
+              flex
+              items-center
+              gap-4
+              px-4
+              rounded-r-full
+              border-none
+              bg-[#d3e3fd]
+              text-[#001d35]
+              text-sm
+              font-medium
+              text-left
+            "
+          >
+            <span>
+              📥
+            </span>
 
-          <div className="flex flex-wrap items-end justify-between gap-4">
+            <span className="flex-1">
+              Inbox
+            </span>
 
-            <div>
+            <span className="font-semibold">
+              1,797
+            </span>
+          </button>
 
-              <div className="flex items-center gap-2">
 
-                <span className="text-xs font-semibold text-[#2563eb]">
-                  MAILGUARD
-                </span>
+          <SidebarItem
+            icon="☆"
+            label="Starred"
+          />
 
-                <span className="text-[#a7b6c8]">
-                  /
-                </span>
+          <SidebarItem
+            icon="◷"
+            label="Snoozed"
+          />
 
-                <span className="text-xs text-[#71839b]">
-                  Analyzer
-                </span>
+          <SidebarItem
+            icon="➤"
+            label="Sent"
+          />
 
-              </div>
+          <SidebarItem
+            icon="📝"
+            label="Drafts"
+            count="1"
+            bold
+          />
 
-              <h2 className="mt-2 text-2xl md:text-3xl font-bold text-[#12345b]">
-                Analyzer Dashboard
-              </h2>
+          <SidebarItem
+            icon="🛍"
+            label="Purchases"
+            count="5"
+            bold
+          />
 
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-[#6b7c93]">
-                A complete forensic overview of the selected
-                email, combining message metadata,
-                authentication information and detection-engine
-                results.
-              </p>
+          <SidebarItem
+            icon="⌄"
+            label="More"
+          />
 
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <div
-                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] font-semibold ${
-                    hasAnalysis
-                      ? "bg-[#edf8f1] border-[#cce8d5] text-[#188038]"
-                      : "bg-[#fff8e1] border-[#f3df9b] text-[#9a6700]"
-                  }`}
-                >
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      hasAnalysis
-                        ? "bg-[#16a34a]"
-                        : "bg-[#f59e0b]"
-                    }`}
-                  />
-                  {hasAnalysis ? "Analysis Available" : "Analysis Not Cached"}
-                </div>
 
-                <span className="text-[11px] text-[#7b8da6]">
-                  {cacheSource}
-                </span>
+          {/* Labels */}
 
-                {!hasAnalysis && (
-                  <button
-                    onClick={runFullAnalysis}
-                    disabled={loading}
-                    className="
-                      inline-flex
-                      items-center
-                      gap-2
-                      px-4
-                      py-2
-                      rounded-lg
-                      bg-[#2563eb]
-                      text-white
-                      text-xs
-                      font-semibold
-                      shadow-sm
-                      hover:bg-[#1d4ed8]
-                      hover:shadow-md
-                      disabled:opacity-60
-                      disabled:cursor-not-allowed
-                      transition
-                    "
-                  >
-                    {loading ? "Analyzing..." : "Analyze Email"}
-                  </button>
-                )}
+          <div className="mt-7 px-4">
 
-                {hasAnalysis && (
-                  <button
-                    onClick={runFullAnalysis}
-                    disabled={loading}
-                    className="
-                      inline-flex
-                      items-center
-                      gap-2
-                      px-4
-                      py-2
-                      rounded-lg
-                      bg-[#e8f1ff]
-                      border
-                      border-[#c7dbf5]
-                      text-[#2563eb]
-                      text-xs
-                      font-semibold
-                      hover:bg-[#dbe9fc]
-                      disabled:opacity-60
-                      disabled:cursor-not-allowed
-                      transition
-                    "
-                  >
-                    {loading ? "Running..." : "Re-run Analysis"}
-                  </button>
-                )}
-              </div>
+            <div
+              className="
+                flex
+                items-center
+                justify-between
+                mb-3
+              "
+            >
+
+              <span className="font-medium text-sm">
+                Labels
+              </span>
+
+              <button
+                className="
+                  text-xl
+                  text-[#5f6368]
+                  border-none
+                  bg-transparent
+                  cursor-pointer
+                "
+              >
+                +
+              </button>
 
             </div>
 
           </div>
 
-        </div>
+
+          {/* MailGuard */}
+
+          <div
+            className="
+              mt-3
+              px-3
+              pb-5
+            "
+          >
+
+            <div
+              className="
+                flex
+                items-center
+                gap-2
+                px-2
+                pb-3
+                mb-2
+                border-b
+                border-[#dadce0]
+                text-sm
+                font-semibold
+                text-[#1e7e5a]
+              "
+            >
+              🛡
+              MailGuard Security
+            </div>
 
 
-        {/* ====================================================
-            RISK OVERVIEW
-        ===================================================== */}
+            <button
+              onClick={() => navigate(`/phishing?message_id=${encodeURIComponent(messageId)}`)}
+              className={securitySidebarClass}
+            >
+              🎣
+              Phishing Detection
+            </button>
 
-        {/* ====================================================
-            CACHE STATUS
-        ===================================================== */}
+            <button
+              onClick={() => navigate(`/social?message_id=${encodeURIComponent(messageId)}`)}
+              className={securitySidebarClass}
+            >
+              👥
+              Social Analysis
+            </button>
 
-        <SectionCard className="mb-6 overflow-hidden">
-          <div className="p-5">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-start gap-3">
+            <button
+              onClick={() =>
+                navigate(
+                  `/ip-tracing?message_id=${encodeURIComponent(
+                    messageId
+                  )}`
+                )
+              }
+              className={securitySidebarClass}
+            >
+              🌐
+              IP Tracing
+            </button>
+
+            <button
+            
+              onClick={() => navigate(`/analyzer?message_id=${encodeURIComponent(messageId)}`)}
+              className={securitySidebarClass}
+            >
+              🔍
+              Email Analyzer
+            </button>
+
+          </div>
+
+        </aside>
+
+
+        {/* =================================================
+            EMAIL + SECURITY
+        ================================================== */}
+
+        <div
+          className="
+            flex-1
+            min-w-0
+            flex
+            flex-col
+            overflow-hidden
+          "
+        >
+
+          {/* =================================================
+              GMAIL MESSAGE TOOLBAR
+          ================================================== */}
+
+          <div
+            className="
+              h-[56px]
+              min-h-[56px]
+              flex
+              items-center
+              justify-between
+              px-4
+              bg-white
+              border-b
+              border-[#e5e7eb]
+            "
+          >
+
+            <div className="flex items-center gap-1">
+
+              {/* Back */}
+
+              <button
+                onClick={() => navigate("/dashboard")}
+                className={messageToolbarButton}
+                title="Back to Inbox"
+              >
+                ←
+              </button>
+
+
+              {/* Archive */}
+
+              <button
+                className={messageToolbarButton}
+                title="Archive"
+              >
+                ▣
+              </button>
+
+
+              {/* Report spam */}
+
+              <button
+                className={messageToolbarButton}
+                title="Report spam"
+              >
+                !
+              </button>
+
+
+              {/* Delete */}
+
+              <button
+                className={messageToolbarButton}
+                title="Delete"
+              >
+                🗑
+              </button>
+
+
+              <div className="h-6 w-px bg-[#dadce0] mx-2" />
+
+
+              {/* Mark unread */}
+
+              <button
+                className={messageToolbarButton}
+                title="Mark as unread"
+              >
+                ✉
+              </button>
+
+
+              {/* Snooze */}
+
+              <button
+                className={messageToolbarButton}
+                title="Snooze"
+              >
+                ◷
+              </button>
+
+
+              {/* More */}
+
+              <button
+                className={messageToolbarButton}
+                title="More"
+              >
+                ⋮
+              </button>
+
+            </div>
+
+
+            {/* Right */}
+
+            <div className="flex items-center gap-1">
+
+              <button
+                className={messageToolbarButton}
+                title="Previous"
+              >
+                ‹
+              </button>
+
+              <button
+                className={messageToolbarButton}
+                title="Next"
+              >
+                ›
+              </button>
+
+            </div>
+
+          </div>
+
+
+          {/* =================================================
+              MESSAGE AREA
+          ================================================== */}
+
+          <div
+            className="
+              flex-1
+              min-h-0
+              flex
+              gap-4
+              p-0
+              overflow-hidden
+            "
+          >
+
+            {/* =================================================
+                ORIGINAL GMAIL MESSAGE
+            ================================================== */}
+
+            <main
+              className="
+                flex-1
+                min-w-0
+                bg-white
+                overflow-y-auto
+              "
+            >
+
+              {error ? (
+
                 <div
-                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg ${
-                    hasAnalysis
-                      ? "bg-[#eaf7ef] text-[#188038]"
-                      : "bg-[#fff4d6] text-[#9a6700]"
-                  }`}
+                  className="
+                    p-8
+                    text-sm
+                    text-[#c5221f]
+                  "
                 >
-                  {hasAnalysis ? "✓" : "⏳"}
+                  {error}
                 </div>
 
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider font-semibold text-[#7b8da6]">
-                    Temporary Analysis Cache
-                  </p>
-                  <h3 className="mt-1 text-sm font-semibold text-[#173b66]">
-                    {hasAnalysis
-                      ? "Cached analysis is available"
-                      : "This email has not been analyzed yet"}
-                  </h3>
-                  <p className="mt-1 text-xs leading-5 text-[#6b7c93]">
-                    {hasAnalysis
-                      ? "The dashboard is displaying the combined forensic result from the backend cache."
-                      : "Run the complete analysis once. The backend will store the combined result temporarily for faster access."}
-                  </p>
-                </div>
-              </div>
+              ) : (
 
-              <div className="flex flex-wrap items-center gap-2">
-                <span
-                  className={`px-3 py-1.5 rounded-full border text-[11px] font-semibold ${
-                    hasAnalysis
-                      ? "bg-[#edf8f1] border-[#cce8d5] text-[#188038]"
-                      : "bg-[#fff8e1] border-[#f3df9b] text-[#9a6700]"
-                  }`}
-                >
-                  {hasAnalysis ? "CACHE HIT" : "CACHE MISS"}
+                <article className="w-full">
+
+                  {/* =========================================
+                      SUBJECT
+                  ========================================== */}
+
+                  <div
+                    className="
+                      px-6
+                      md:px-10
+                      pt-7
+                    "
+                  >
+
+                    <div
+                      className="
+                        flex
+                        items-center
+                        gap-2
+                        flex-wrap
+                      "
+                    >
+
+                      <h1
+                        className="
+                          text-[24px]
+                          md:text-[26px]
+                          font-normal
+                          text-[#202124]
+                          leading-tight
+                          break-words
+                        "
+                      >
+                        {subject}
+                      </h1>
+
+
+                      <span
+                        className="
+                          px-2
+                          py-1
+                          rounded
+                          bg-[#e8eaed]
+                          text-[11px]
+                          text-[#5f6368]
+                        "
+                      >
+                        Inbox
+                      </span>
+
+                    </div>
+
+                  </div>
+
+
+                  {/* =========================================
+                      SENDER HEADER
+                  ========================================== */}
+
+                  <div
+                    className="
+                      px-6
+                      md:px-10
+                      py-5
+                      flex
+                      items-start
+                      gap-4
+                    "
+                  >
+
+                    {/* Avatar */}
+
+                    <div
+                      className="
+                        w-10
+                        h-10
+                        shrink-0
+                        rounded-full
+                        bg-[#1a73e8]
+                        text-white
+                        flex
+                        items-center
+                        justify-center
+                        font-medium
+                        text-lg
+                      "
+                    >
+                      {(senderName || "?")
+                        .charAt(0)
+                        .toUpperCase()}
+                    </div>
+
+
+                    {/* Sender */}
+
+                    <div className="flex-1 min-w-0">
+
+                      <div
+                        className="
+                          flex
+                          items-center
+                          gap-2
+                          flex-wrap
+                        "
+                      >
+
+                        <span
+                          className="
+                            font-medium
+                            text-sm
+                            text-[#202124]
+                          "
+                        >
+                          {senderName}
+                        </span>
+
+                        <span
+                          className="
+                            text-xs
+                            text-[#5f6368]
+                          "
+                        >
+                          &lt;{senderEmail}&gt;
+                        </span>
+
+                      </div>
+
+
+                      <div
+                        className="
+                          text-xs
+                          text-[#5f6368]
+                          mt-1
+                        "
+                      >
+                        to me
+                        <span className="ml-1">
+                          ▾
+                        </span>
+                      </div>
+
+                    </div>
+
+
+                    {/* Date */}
+
+                    <div
+                      className="
+                        hidden
+                        sm:block
+                        text-xs
+                        text-[#5f6368]
+                        whitespace-nowrap
+                      "
+                    >
+                      {formatDate(date)}
+                    </div>
+
+
+                    {/* Actions */}
+
+                    <div className="flex items-center gap-1">
+
+                      <button
+                        className={smallIconButton}
+                        title="Star"
+                      >
+                        ☆
+                      </button>
+
+                      <button
+                        className={smallIconButton}
+                        title="Reply"
+                      >
+                        ↩
+                      </button>
+
+                      <button
+                        className={smallIconButton}
+                        title="More"
+                      >
+                        ⋮
+                      </button>
+
+                    </div>
+
+                  </div>
+
+
+                  {/* =========================================
+                      ORIGINAL HTML EMAIL
+                  ========================================== */}
+
+                  <div
+                    className="
+                      px-6
+                      md:px-10
+                      pb-8
+                    "
+                  >
+
+                    {htmlBody ? (
+
+                      <div
+                        className="
+                          w-full
+                          bg-white
+                          overflow-hidden
+                        "
+                      >
+
+                        <iframe
+                          title="Original Gmail Email"
+                          srcDoc={htmlBody}
+                          sandbox=""
+                          scrolling="no"
+                          className="
+                            block
+                            w-full
+                            min-h-[700px]
+                            border-0
+                            bg-white
+                          "
+                          onLoad={(event) => {
+
+                            try {
+
+                              const iframe =
+                                event.currentTarget;
+
+                              const iframeDocument =
+                                iframe.contentDocument ||
+                                iframe.contentWindow?.document;
+
+                              if (
+                                !iframeDocument ||
+                                !iframeDocument.body
+                              ) {
+                                return;
+                              }
+
+                              // Give the browser a moment
+                              // to finish rendering images
+                              setTimeout(() => {
+
+                                try {
+
+                                  const bodyHeight =
+                                    iframeDocument.body
+                                      .scrollHeight;
+
+                                  const documentHeight =
+                                    iframeDocument.documentElement
+                                      ?.scrollHeight || 0;
+
+                                  const height = Math.max(
+                                    bodyHeight,
+                                    documentHeight,
+                                    700
+                                  );
+
+                                  iframe.style.height =
+                                    `${height + 30}px`;
+
+                                } catch (error) {
+
+                                  console.error(
+                                    "Iframe resize error:",
+                                    error
+                                  );
+
+                                }
+
+                              }, 300);
+
+                            } catch (error) {
+
+                              console.error(
+                                "Unable to access email iframe:",
+                                error
+                              );
+
+                            }
+
+                          }}
+                        />
+
+                      </div>
+
+                    ) : body ? (
+
+                      /* ---------------------------------------
+                         PLAIN TEXT FALLBACK
+                      ---------------------------------------- */
+
+                      <div
+                        className="
+                          max-w-[900px]
+                          whitespace-pre-wrap
+                          break-words
+                          text-sm
+                          leading-7
+                          text-[#202124]
+                        "
+                      >
+                        {body}
+                      </div>
+
+                    ) : (
+
+                      <div
+                        className="
+                          py-10
+                          text-sm
+                          text-[#5f6368]
+                          italic
+                        "
+                      >
+                        This email has no body content available
+                        from the backend.
+                      </div>
+
+                    )}
+
+                  </div>
+
+
+                  {/* =========================================
+                      ATTACHMENTS
+                  ========================================== */}
+
+                  {attachments.length > 0 && (
+
+                    <div
+                      className="
+                        mx-6
+                        md:mx-10
+                        pt-5
+                        border-t
+                        border-[#e5e7eb]
+                      "
+                    >
+
+                      <div
+                        className="
+                          text-sm
+                          font-medium
+                          text-[#3c4043]
+                          mb-3
+                        "
+                      >
+                        {attachments.length} Attachment
+                        {attachments.length !== 1 ? "s" : ""}
+                      </div>
+
+
+                      <div
+                        className="
+                          flex
+                          flex-wrap
+                          gap-3
+                        "
+                      >
+
+                        {attachments.map(
+                          (att, index) => (
+
+                            <div
+                              key={index}
+                              className="
+                                min-w-[190px]
+                                max-w-[280px]
+                                flex
+                                items-center
+                                gap-3
+                                px-3
+                                py-3
+                                border
+                                border-[#dadce0]
+                                rounded-lg
+                                bg-white
+                                hover:bg-[#f8f9fa]
+                                cursor-pointer
+                              "
+                            >
+
+                              <span className="text-xl">
+                                📎
+                              </span>
+
+                              <div className="min-w-0">
+
+                                <div
+                                  className="
+                                    text-sm
+                                    font-medium
+                                    truncate
+                                  "
+                                >
+                                  {att.name ||
+                                    att.filename ||
+                                    `Attachment ${index + 1}`}
+                                </div>
+
+                                {att.size && (
+
+                                  <div
+                                    className="
+                                      text-xs
+                                      text-[#5f6368]
+                                      mt-1
+                                    "
+                                  >
+                                    {att.size}
+                                  </div>
+
+                                )}
+
+                              </div>
+
+                            </div>
+
+                          )
+                        )}
+
+                      </div>
+
+                    </div>
+
+                  )}
+
+
+                  {/* =========================================
+                      REPLY / FORWARD
+                  ========================================== */}
+
+                  <div
+                    className="
+                      px-6
+                      md:px-10
+                      py-8
+                      flex
+                      items-center
+                      gap-3
+                    "
+                  >
+
+                    <button
+                      className="
+                        flex
+                        items-center
+                        gap-2
+                        px-5
+                        py-2
+                        rounded-full
+                        border
+                        border-[#747775]
+                        bg-white
+                        text-sm
+                        text-[#3c4043]
+                        hover:bg-[#f1f3f4]
+                        cursor-pointer
+                      "
+                    >
+                      ↩
+                      Reply
+                    </button>
+
+
+                    <button
+                      className="
+                        flex
+                        items-center
+                        gap-2
+                        px-5
+                        py-2
+                        rounded-full
+                        border
+                        border-[#747775]
+                        bg-white
+                        text-sm
+                        text-[#3c4043]
+                        hover:bg-[#f1f3f4]
+                        cursor-pointer
+                      "
+                    >
+                      ↪
+                      Forward
+                    </button>
+
+                  </div>
+
+
+                  {/* =========================================
+                      MESSAGE ID
+                  ========================================== */}
+
+                  <div
+                    className="
+                      px-6
+                      md:px-10
+                      pb-8
+                      text-[11px]
+                      text-[#9aa0a6]
+                    "
+                  >
+                    Message ID:{" "}
+                    <code className="font-mono break-all">
+                      {messageId}
+                    </code>
+                  </div>
+
+                </article>
+
+              )}
+
+            </main>
+
+
+            {/* =================================================
+                MAILGUARD PANEL
+            ================================================== */}
+
+            <aside className="hidden xl:flex w-[340px] shrink-0 m-3  ml-0  rounded-xl  bg-white  border  border-[#e5e7eb]  shadow-sm  flex-col  overflow-hidden " >
+
+              {/* Header */}
+
+              <div
+                className="
+                  px-5
+                  py-4
+                  border-b
+                  border-[#e5e7eb]
+                  flex
+                  items-center
+                  gap-2
+                "
+              >
+
+                <span className="text-lg">
+                  🛡️
                 </span>
 
+                <div>
+
+                  <div
+                    className="
+                      text-sm
+                      font-semibold
+                      text-[#1e7e5a]
+                    "
+                  >
+                    MailGuard
+                  </div>
+
+                  <div
+                    className="
+                      text-xs
+                      text-[#5f6368]
+                    "
+                  >
+                    Security Analysis
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              {/* Tools */}
+
+              <div
+                className="
+                  flex-1
+                  overflow-y-auto
+                  p-4
+                  space-y-5
+                "
+              >
+
+                {/* =========================================
+                    FULL ANALYSIS
+                ========================================== */}
+
                 <button
-                  onClick={fetchCachedAnalysis}
-                  disabled={loading}
+                  onClick={runAnalysis}
+                  disabled={analysis?.loading}
                   className="
-                    px-3.5
-                    py-2
-                    rounded-lg
-                    border
-                    border-[#d4e1ef]
-                    bg-white
-                    text-xs
-                    font-semibold
-                    text-[#2563eb]
-                    hover:bg-[#f3f7fc]
+                    w-full
+                    px-4
+                    py-3
+                    rounded-xl
+                    bg-[#1a73e8]
+                    text-white
+                    text-sm
+                    font-medium
+                    hover:bg-[#1765cc]
                     disabled:opacity-60
                     disabled:cursor-not-allowed
                     transition
                   "
                 >
-                  Check Cache
+                  {analysis?.loading
+                    ? "Analyzing email..."
+                    : analysis?.detection_engine ||
+                      analysis?.phishing ||
+                      analysis?.social ||
+                      analysis?.ip_tracing
+                    ? "Re-run Analysis"
+                    : "Analyze Email"}
                 </button>
 
-                {!hasAnalysis && (
-                  <button
-                    onClick={runFullAnalysis}
-                    disabled={loading}
-                    className="
-                      px-3.5
-                      py-2
-                      rounded-lg
-                      bg-[#2563eb]
-                      text-white
-                      text-xs
-                      font-semibold
-                      hover:bg-[#1d4ed8]
-                      disabled:opacity-60
-                      disabled:cursor-not-allowed
-                      transition
-                    "
-                  >
-                    Analyze Now
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </SectionCard>
-
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-6">
-
-          {/* Risk */}
-
-          <SectionCard className="p-5">
-
-            <div className="flex items-start justify-between">
-
-              <div>
-
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7b8da6]">
-                  Overall Assessment
-                </p>
-
-                <h3 className="mt-2 text-2xl font-bold text-[#173b66]">
-                  {riskLevel}
-                </h3>
-
-              </div>
-
-              <div
-                className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold ${riskInfo.bg} ${riskInfo.text}`}
-              >
-                {riskInfo.icon}
-              </div>
-
-            </div>
-
-            <div
-              className={`mt-4 inline-flex px-3 py-1.5 rounded-full border text-[11px] font-bold ${riskInfo.bg} ${riskInfo.border} ${riskInfo.text}`}
-            >
-              {riskInfo.label}
-            </div>
-
-            <p className="mt-3 text-xs leading-5 text-[#6b7c93]">
-              {riskInfo.description}
-            </p>
-
-          </SectionCard>
-
-
-          {/* Threat Score */}
-
-          <SectionCard className="p-5">
-
-            <ScoreCircle
-              score={ai?.threat_score}
-              title="Threat Score"
-              description="Suspicious signals detected by the analysis engine."
-              type="threat"
-            />
-
-          </SectionCard>
-
-
-          {/* Safe Score */}
-
-          <SectionCard className="p-5">
-
-            <ScoreCircle
-              score={ai?.safe_score}
-              title="Safe Score"
-              description="Signals that support a safer classification."
-              type="safe"
-            />
-
-          </SectionCard>
-
-        </div>
-
-        {/* ====================================================
-            SECURITY MODULE SUMMARY
-        ===================================================== */}
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {[
-            {
-              icon: "🎣",
-              title: "Phishing",
-              value: result?.phishing,
-              label: "Phishing detection result",
-              accent: "bg-[#fff0ef] text-[#c5221f] border-[#f4cbc8]",
-            },
-            {
-              icon: "👥",
-              title: "Social Engineering",
-              value: result?.social,
-              label: "Social engineering result",
-              accent: "bg-[#f4efff] text-[#7c3aed] border-[#ddd0fa]",
-            },
-            {
-              icon: "🌐",
-              title: "IP Intelligence",
-              value: result?.ip_tracing,
-              label: "Origin IP intelligence",
-              accent: "bg-[#edf4ff] text-[#2563eb] border-[#d3e3f7]",
-            },
-          ].map((item) => (
-            <div
-              key={item.title}
-              className={`rounded-2xl border p-4 bg-white shadow-sm ${item.accent}`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/80 border border-current/10 flex items-center justify-center text-lg">
-                  {item.icon}
-                </div>
-
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold">
-                    {item.title}
-                  </h3>
-                  <p className="mt-0.5 text-[11px] opacity-70">
-                    {item.label}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-3 rounded-lg bg-white/70 border border-current/10 px-3 py-2">
-                <p className="text-[11px] font-mono break-all opacity-80">
-                  {item.value
-                    ? "Data available in unified analysis"
-                    : "Not analyzed yet"}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-
-        {/* ====================================================
-            EMAIL INFORMATION
-        ===================================================== */}
-
-        <SectionCard className="mb-6">
-
-          <SectionHeader
-            icon="✉"
-            title="Email Information"
-            description="Basic identity and routing information extracted from the email."
-          />
-
-          <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-            <InfoItem
-              label="From"
-              value={email?.from}
-            />
-
-            <InfoItem
-              label="To"
-              value={email?.to}
-            />
-
-            <InfoItem
-              label="Date"
-              value={email?.date}
-            />
-
-            <InfoItem
-              label="Subject"
-              value={email?.subject}
-              fullWidth
-            />
-
-            <InfoItem
-              label="CC"
-              value={email?.cc}
-            />
-
-            <InfoItem
-              label="BCC"
-              value={email?.bcc}
-            />
-
-            <InfoItem
-              label="Reply-To"
-              value={email?.reply_to}
-            />
-
-            <InfoItem
-              label="Return-Path"
-              value={email?.return_path}
-            />
-
-            <InfoItem
-              label="Message-ID"
-              value={email?.message_id}
-              mono
-              fullWidth
-            />
-
-            <InfoItem
-              label="Thread ID"
-              value={email?.thread_id}
-              mono
-            />
-
-            <InfoItem
-              label="Content Type"
-              value={email?.["Content-type"]}
-            />
-
-            <InfoItem
-              label="MIME Version"
-              value={email?.["mime-version"]}
-            />
-
-          </div>
-
-        </SectionCard>
-
-
-        {/* ====================================================
-            AUTHENTICATION
-        ===================================================== */}
-
-        <SectionCard className="mb-6">
-
-          <SectionHeader
-            icon="✓"
-            title="Email Authentication"
-            description="Authentication results extracted from the email's Authentication-Results headers."
-          />
-
-          <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-
-            <AuthenticationCard
-              title="SPF"
-              description="Sender Policy Framework"
-              values={authentication?.spf}
-            />
-
-            <AuthenticationCard
-              title="DKIM"
-              description="DomainKeys Identified Mail"
-              values={authentication?.dkim}
-            />
-
-            <AuthenticationCard
-              title="DMARC"
-              description="Domain-based Message Authentication"
-              values={authentication?.dmarc}
-            />
-
-          </div>
-
-        </SectionCard>
-
-
-        {/* ====================================================
-            IP + GEOLOCATION
-        ===================================================== */}
-
-        <SectionCard className="mb-6">
-
-          <SectionHeader
-            icon="🌐"
-            title="Origin & Network Information"
-            description="Information extracted from the message's Received headers and IP intelligence."
-          />
-
-          <div className="p-5">
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-
-              <div className="lg:col-span-2 rounded-xl bg-[#edf4ff] border border-[#d3e3f7] p-5">
-
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-[#6e829c]">
-                  Origin IP
-                </p>
-
-                <p className="mt-2 text-lg font-mono font-semibold text-[#1e4f8f] break-all">
-                  {email?.origin_ip ||
-                    "Not detected"}
-                </p>
-
-                <p className="mt-2 text-xs text-[#71839b]">
-                  Extracted from the email's Received headers.
-                </p>
-
-              </div>
-
-
-              {email?.geolocation &&
-              typeof email.geolocation === "object" ? (
-                Object.entries(email.geolocation)
-                  .slice(0, 6)
-                  .map(([key, value]) => (
-                    <InfoItem
-                      key={key}
-                      label={key
-                        .replaceAll("_", " ")
-                        .replace(/\b\w/g, (c) =>
-                          c.toUpperCase()
-                        )}
-                      value={
-                        typeof value === "object"
-                          ? JSON.stringify(value)
-                          : value
-                      }
-                    />
-                  ))
-              ) : (
-                <div className="lg:col-span-2 flex items-center justify-center rounded-xl border border-dashed border-[#d4e0ec] p-6">
-                  <p className="text-xs text-[#7b8da6]">
-                    No geolocation data available.
-                  </p>
-                </div>
-              )}
-
-            </div>
-
-          </div>
-
-        </SectionCard>
-
-
-        {/* ====================================================
-            DETECTION FEATURES
-        ===================================================== */}
-
-        <SectionCard className="mb-6">
-
-          <SectionHeader
-            icon="◈"
-            title="Detection Features"
-            description="Numerical features extracted from the email by the detection engine."
-          />
-
-          <div className="p-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-
-            {Object.entries(features).map(
-              ([key, value]) => (
-                <FeatureCard
-                  key={key}
-                  label={
-                    featureLabels[key] ||
-                    key
-                      .replaceAll("_", " ")
-                      .replace(/\b\w/g, (c) =>
-                        c.toUpperCase()
-                      )
-                  }
-                  value={value}
-                />
-              )
-            )}
-
-          </div>
-
-        </SectionCard>
-
-
-        {/* ====================================================
-            AI SUBJECT ANALYSIS
-        ===================================================== */}
-
-        <SectionCard className="mb-6">
-
-          <SectionHeader
-            icon="AI"
-            title="AI Subject Analysis"
-            description="Indicators detected specifically within the email subject."
-          />
-
-          <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-
-            {Object.entries(subjectAnalysis).map(
-              ([key, value]) => (
-                <AnalysisRow
-                  key={key}
-                  label={
-                    aiLabels[key] ||
-                    key
-                      .replaceAll("_", " ")
-                      .replace(/\b\w/g, (c) =>
-                        c.toUpperCase()
-                      )
-                  }
-                  value={value}
-                />
-              )
-            )}
-
-          </div>
-
-        </SectionCard>
-
-
-        {/* ====================================================
-            AI BODY ANALYSIS
-        ===================================================== */}
-
-        <SectionCard className="mb-6">
-
-          <SectionHeader
-            icon="AI"
-            title="AI Body Analysis"
-            description="Behavioral and linguistic indicators detected within the email body."
-          />
-
-          <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-
-            {Object.entries(bodyAnalysis).map(
-              ([key, value]) => (
-                <AnalysisRow
-                  key={key}
-                  label={
-                    aiLabels[key] ||
-                    key
-                      .replaceAll("_", " ")
-                      .replace(/\b\w/g, (c) =>
-                        c.toUpperCase()
-                      )
-                  }
-                  value={value}
-                />
-              )
-            )}
-
-          </div>
-
-        </SectionCard>
-
-
-        {/* ====================================================
-            ANALYSIS REASONS
-        ===================================================== */}
-
-        <SectionCard className="mb-6">
-
-          <SectionHeader
-            icon="!"
-            title="Why MailGuard Reached This Result"
-            description="Explanations returned by the detection engine."
-          />
-
-          <div className="p-5">
-
-            {Array.isArray(ai?.reasons) &&
-            ai.reasons.length > 0 ? (
-              <div className="space-y-3">
-
-                {ai.reasons.map(
-                  (reason, index) => (
-                    <div
-                      key={index}
-                      className="flex gap-4 p-4 rounded-xl bg-[#f8fbff] border border-[#e0eaf5]"
-                    >
-
-                      <div className="w-7 h-7 rounded-full bg-[#e8f1ff] text-[#2563eb] flex items-center justify-center text-xs font-bold shrink-0">
-                        {index + 1}
-                      </div>
-
-                      <p className="text-sm leading-6 text-[#405572]">
-                        {reason}
-                      </p>
-
+                {analysis?.loading && (
+                  <div className="mt-3 rounded-xl border border-[#d2e3fc] bg-[#f8fbff] p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-[#3c4043]">
+                        Running security analysis
+                      </span>
+                      <span className="text-xs font-bold text-[#1a73e8]">
+                        {analysisProgress}%
+                      </span>
                     </div>
-                  )
+
+                    <div className="w-full h-2 rounded-full bg-[#e8eaed] overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-[#1a73e8] transition-all duration-500 ease-out"
+                        style={{ width: `${analysisProgress}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="w-2 h-2 rounded-full bg-[#1a73e8] animate-pulse" />
+                      <span className="text-[11px] text-[#5f6368]">
+                        Please wait while MailGuard checks the email...
+                      </span>
+                    </div>
+                  </div>
                 )}
 
-              </div>
-            ) : (
-              <p className="text-sm text-[#71839b]">
-                No reasons were returned by the analysis engine.
-              </p>
-            )}
+                {ANALYSIS_TOOLS.map((tool) => {
 
-          </div>
+                  const resultMap = {
+                    analyze: analysis?.detection_engine,
+                    phishing: analysis?.phishing,
+                    social: analysis?.social,
+                    ip: analysis?.ip_tracing,
+                  };
 
-        </SectionCard>
+                  const state = resultMap[tool.key];
 
+                  return (
 
-        {/* ====================================================
-            RECEIVED HEADERS
-        ===================================================== */}
-
-        <SectionCard className="mb-6">
-
-          <SectionHeader
-            icon="↪"
-            title="Received Headers"
-            description="Mail-server routing information extracted from the message."
-          />
-
-          <div className="p-5">
-
-            {Array.isArray(email?.received) &&
-            email.received.length > 0 ? (
-              <div className="space-y-3">
-
-                {email.received.map(
-                  (header, index) => (
                     <div
-                      key={index}
-                      className="rounded-xl border border-[#e0e9f3] bg-[#f9fbfe] p-4"
+                      key={tool.key}
+                      className="
+                        pb-5
+                        border-b
+                        border-[#edf0f2]
+                      "
                     >
-                      <div className="flex gap-3">
 
-                        <span className="w-6 h-6 rounded-full bg-[#e8f1ff] text-[#2563eb] flex items-center justify-center text-[10px] font-bold shrink-0">
-                          {index + 1}
+                      {/* Tool title */}
+
+                      <div
+                        className="
+                          flex
+                          items-start
+                          gap-3
+                        "
+                      >
+
+                        <span className="text-xl">
+                          {tool.icon}
                         </span>
 
-                        <p className="text-xs leading-6 font-mono text-[#526983] break-all">
-                          {header}
-                        </p>
+                        <div className="min-w-0">
 
-                      </div>
-                    </div>
-                  )
-                )}
+                          <div
+                            className="
+                              text-sm
+                              font-medium
+                              text-[#202124]
+                            "
+                          >
+                            {tool.label}
+                          </div>
 
-              </div>
-            ) : (
-              <p className="text-sm text-[#71839b]">
-                No Received headers available.
-              </p>
-            )}
+                          <div
+                            className="
+                              mt-1
+                              text-xs
+                              leading-5
+                              text-[#5f6368]
+                            "
+                          >
+                            {tool.description}
+                          </div>
 
-          </div>
-
-        </SectionCard>
-
-
-        {/* ====================================================
-            URLS
-        ===================================================== */}
-
-        <SectionCard className="mb-6">
-
-          <SectionHeader
-            icon="🔗"
-            title="Detected URLs"
-            description="URLs extracted from the plain-text and HTML portions of the email."
-          />
-
-          <div className="p-5">
-
-            <div className="flex items-center justify-between mb-4">
-
-              <span className="text-xs text-[#71839b]">
-                Total URLs
-              </span>
-
-              <span className="px-3 py-1 rounded-full bg-[#e8f1ff] border border-[#cbdcf2] text-[#2563eb] text-xs font-semibold">
-                {Array.isArray(email?.urls)
-                  ? email.urls.length
-                  : 0}
-              </span>
-
-            </div>
-
-
-            {Array.isArray(email?.urls) &&
-            email.urls.length > 0 ? (
-              <div className="max-h-[420px] overflow-y-auto space-y-2 pr-1">
-
-                {email.urls.map(
-                  (url, index) => (
-                    <div
-                      key={index}
-                      className="flex items-start gap-3 p-3 rounded-lg bg-[#f9fbfe] border border-[#e2eaf3]"
-                    >
-
-                      <span className="text-[10px] text-[#8ba0b8] mt-1 shrink-0">
-                        {index + 1}
-                      </span>
-
-                      <span className="text-xs font-mono text-[#315d91] break-all">
-                        {url}
-                      </span>
-
-                    </div>
-                  )
-                )}
-
-              </div>
-            ) : (
-              <div className="py-8 text-center">
-                <p className="text-sm text-[#60758f]">
-                  No URLs detected.
-                </p>
-              </div>
-            )}
-
-          </div>
-
-        </SectionCard>
-
-
-        {/* ====================================================
-            ATTACHMENTS
-        ===================================================== */}
-
-        <SectionCard className="mb-6">
-
-          <SectionHeader
-            icon="📎"
-            title="Attachments"
-            description="Files detected in the email."
-          />
-
-          <div className="p-5">
-
-            {Array.isArray(email?.attachments) &&
-            email.attachments.length > 0 ? (
-              <div className="space-y-3">
-
-                {email.attachments.map(
-                  (attachment, index) => (
-                    <div
-                      key={index}
-                      className="flex flex-col md:flex-row md:items-center gap-4 p-4 rounded-xl border border-[#e0e9f3] bg-[#f9fbfe]"
-                    >
-
-                      <div className="w-10 h-10 rounded-lg bg-[#e8f1ff] flex items-center justify-center text-lg shrink-0">
-                        📄
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-
-                        <p className="text-sm font-semibold text-[#173b66] break-all">
-                          {attachment?.filename ||
-                            "Unnamed attachment"}
-                        </p>
-
-                        <p className="mt-1 text-xs text-[#71839b]">
-                          {attachment?.content_type ||
-                            "Unknown type"}
-                        </p>
+                        </div>
 
                       </div>
 
-                      <div className="text-xs text-[#60758f]">
-                        {attachment?.size
-                          ? `${attachment.size} bytes`
-                          : "Size unavailable"}
-                      </div>
+
+                      {/* Run / Open button */}
+
+                      <button
+                        onClick={() => {
+                          if (!analysis || analysis.loading) return;
+
+                          navigate(
+                            `${tool.page}?message_id=${encodeURIComponent(messageId)}`
+                          );
+                        }}
+                        disabled={!analysis || analysis.loading}
+                        className={`
+                          mt-3 px-4 py-2 rounded-lg border text-xs font-medium transition
+                          ${
+                            !analysis || analysis.loading
+                              ? "border-[#dadce0] bg-[#f1f3f4] text-[#9aa0a6] cursor-not-allowed"
+                              : "border-[#1e7e5a] bg-[#e6f4ee] text-[#1e7e5a] hover:bg-[#d3ece0] cursor-pointer"
+                          }
+                        `}
+                      >
+                        {analysis?.loading ? "Locked" : "Open"}
+                      </button>
+
+                      {/* Error */}
+
+                      {analysis?.error && (
+
+                        <div
+                          className="
+                            mt-3
+                            p-3
+                            rounded-lg
+                            bg-[#fce8e6]
+                            border
+                            border-[#f5c2c0]
+                            text-xs
+                            text-[#c5221f]
+                          "
+                        >
+                          {analysis.error}
+                        </div>
+
+                      )}
+
+
+                      {/* Result */}
 
                     </div>
-                  )
-                )}
 
-              </div>
-            ) : (
-              <div className="rounded-xl bg-[#f8fbff] border border-[#e0eaf5] p-7 text-center">
+                  );
 
-                <div className="text-2xl">
-                  📎
+                })}
+
+
                 </div>
 
-                <p className="mt-2 text-sm font-medium text-[#405572]">
-                  No attachments detected
-                </p>
+              
 
-                <p className="mt-1 text-xs text-[#7b8da6]">
-                  This email does not contain any detected attachments.
-                </p>
-
-              </div>
-            )}
+            </aside>
 
           </div>
 
-        </SectionCard>
-
-
-        {/* ====================================================
-            OTHER SECURITY TOOLS
-        ===================================================== */}
-
-        <div className="mt-8 mb-4">
-
-          <h2 className="text-lg font-bold text-[#12345b]">
-            Continue Security Analysis
-          </h2>
-
-          <p className="mt-1 text-xs leading-5 text-[#6b7c93]">
-            Investigate this email further using the same
-            temporary cached analysis data.
-          </p>
-
         </div>
 
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-
-          {/* PHISHING */}
-
-          <NavigationCard
-            icon="🎣"
-            title="Phishing Detection"
-            description="Analyze suspicious links, impersonation, credential requests and other phishing indicators."
-            buttonText="Open Phishing Detection"
-            onClick={() =>
-              navigate(
-                `/phishing?message_id=${encodeURIComponent(
-                  messageId
-                )}`
-              )
-            }
-          />
-
-
-          {/* SOCIAL ENGINEERING */}
-
-          <NavigationCard
-            icon="👥"
-            title="Social Engineering"
-            description="Investigate manipulation tactics such as urgency, fear, pressure and impersonation."
-            buttonText="Open Social Engineering"
-            onClick={() =>
-              navigate(
-                `/social?message_id=${encodeURIComponent(
-                  messageId
-                )}`
-              )
-            }
-          />
-
-
-          {/* IP TRACING */}
-
-          <NavigationCard
-            icon="🌐"
-            title="IP Tracing"
-            description="Investigate the originating IP address, network information and geographic intelligence."
-            buttonText="Open IP Tracing"
-            onClick={() =>
-              navigate(
-                `/ip-tracing?message_id=${encodeURIComponent(
-                  messageId
-                )}`
-              )
-            }
-          />
-
-        </div>
-
-
-        {/* ====================================================
-            BOTTOM NAVIGATION
-        ===================================================== */}
-
-        <div className="mt-7 flex flex-wrap gap-3">
-
-          <button
-            onClick={() => navigate(-1)}
-            className="
-              px-4
-              py-2.5
-              rounded-lg
-              bg-white
-              border
-              border-[#d5e1ee]
-              text-sm
-              font-semibold
-              text-[#526983]
-              hover:bg-[#f4f8fd]
-              cursor-pointer
-            "
-          >
-            ← Back to Email
-          </button>
-
-          <button
-            onClick={() =>
-              navigate(
-                `/phishing?message_id=${encodeURIComponent(
-                  messageId
-                )}`
-              )
-            }
-            className="
-              px-4
-              py-2.5
-              rounded-lg
-              bg-[#2563eb]
-              text-white
-              text-sm
-              font-semibold
-              hover:bg-[#1d4ed8]
-              cursor-pointer
-            "
-          >
-            Continue Investigation →
-          </button>
-
-        </div>
-
-
-        {/* ====================================================
-            FOOTER
-        ===================================================== */}
-
-        <div className="mt-10 pb-5 text-center">
-
-          <p className="text-[11px] text-[#91a1b5]">
-            MailGuard • Email Forensic Security
-          </p>
-
-          <p className="mt-1 text-[10px] text-[#a3b0c0]">
-            Analysis generated from the connected Gmail message.
-          </p>
-
-        </div>
-
-      </main>
+      </div>
 
     </div>
   );
 }
+
+
+// =====================================================
+// SIDEBAR ITEM
+// =====================================================
+
+function SidebarItem({
+  icon,
+  label,
+  count,
+  bold = false,
+}) {
+  return (
+    <button
+      className="
+        w-full
+        h-9
+        px-4
+        flex
+        items-center
+        gap-4
+        rounded-r-full
+        border-none
+        bg-transparent
+        text-[#3c4043]
+        text-sm
+        text-left
+        cursor-pointer
+        hover:bg-[#e8eaed]
+      "
+    >
+
+      <span className="w-5 text-center">
+        {icon}
+      </span>
+
+      <span
+        className={
+          bold
+            ? "flex-1 font-semibold"
+            : "flex-1"
+        }
+      >
+        {label}
+      </span>
+
+      {count && (
+        <span className="text-xs">
+          {count}
+        </span>
+      )}
+
+    </button>
+  );
+}
+
+
+// =====================================================
+// EXTRACT SENDER EMAIL
+// =====================================================
+
+function extractEmail(value) {
+  if (!value) return "";
+
+  const match = value.match(
+    /<([^>]+)>/
+  );
+
+  return match
+    ? match[1]
+    : value;
+}
+
+
+// =====================================================
+// EXTRACT SENDER NAME
+// =====================================================
+
+function extractSenderName(value) {
+  if (!value) {
+    return "Unknown sender";
+  }
+
+  const match = value.match(
+    /^(.+?)\s*<[^>]+>$/
+  );
+
+  if (match) {
+    return match[1]
+      .replace(/^"|"$/g, "")
+      .trim();
+  }
+
+  return value;
+}
+
+
+// =====================================================
+// FORMAT DATE
+// =====================================================
+
+function formatDate(value) {
+  if (!value) return "";
+
+  try {
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return date.toLocaleString([], {
+      hour: "numeric",
+      minute: "2-digit",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+  } catch {
+    return value;
+  }
+}
+
+
+// =====================================================
+// TAILWIND CLASS CONSTANTS
+// =====================================================
+
+const headerButtonClass = `
+  w-10
+  h-10
+  flex
+  items-center
+  justify-center
+  rounded-full
+  border-none
+  bg-transparent
+  text-[#5f6368]
+  text-lg
+  cursor-pointer
+  hover:bg-[#e8eaed]
+`;
+
+const messageToolbarButton = `
+  w-10
+  h-10
+  flex
+  items-center
+  justify-center
+  rounded-full
+  border-none
+  bg-transparent
+  text-[#5f6368]
+  text-lg
+  cursor-pointer
+  hover:bg-[#f1f3f4]
+`;
+
+const smallIconButton = `
+  w-9
+  h-9
+  flex
+  items-center
+  justify-center
+  rounded-full
+  border-none
+  bg-transparent
+  text-[#5f6368]
+  text-lg
+  cursor-pointer
+  hover:bg-[#f1f3f4]
+`;
+
+const securitySidebarClass = `
+  w-full
+  flex
+  items-center
+  gap-3
+  px-3
+  py-2
+  rounded-lg
+  border-none
+  bg-transparent
+  text-[#3c4043]
+  text-xs
+  text-left
+  cursor-pointer
+  hover:bg-[#e8eaed]
+`;
+
+export default EmailDetail;
