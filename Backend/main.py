@@ -3,6 +3,7 @@ import os
 import secrets
 from typing import Optional
 import os
+from fastapi import Header
 from fastapi import FastAPI, HTTPException, Request
 from google_auth_oauthlib.flow import Flow
 from fastapi import FastAPI, HTTPException, Request
@@ -30,6 +31,13 @@ from Database import get_db
 from DBmodel import  GmailAccount
 
 from Database import engine, Base
+
+
+from jose import jwt
+from datetime import datetime, timedelta
+
+JWT_SECRET = os.getenv("JWT_SECRET")
+JWT_ALGORITHM = "HS256"
 # import DBmodel
 
 
@@ -128,37 +136,64 @@ async def upload_eml(file: UploadFile = File(...)):
             status_code=500,
             detail=str(e)
         )
+def create_access_token(account_id: int):
+    expire = datetime.utcnow() + timedelta(days=7)
 
+    payload = {
+        "account_id": account_id,
+        "exp": expire
+    }
+
+    return jwt.encode(
+        payload,
+        JWT_SECRET,
+        algorithm=JWT_ALGORITHM
+    )
 # ============================================================
 # AUTH STATUS
 # ============================================================
 
 @app.get("/auth/status")
 def auth_status(
-    request: Request,
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
-
-    account_id = request.session.get(
-        "gmail_account_id"
-    )
-
-    # No application session
-    if not account_id:
+    if not authorization:
         return {
             "authenticated": False
         }
 
-    # Check that account still exists
+    if not authorization.startswith("Bearer "):
+        return {
+            "authenticated": False
+        }
+
+    token = authorization.split(" ", 1)[1]
+
+    try:
+        payload = jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM]
+        )
+
+        account_id = payload.get("account_id")
+
+        if not account_id:
+            return {
+                "authenticated": False
+            }
+
+    except Exception:
+        return {
+            "authenticated": False
+        }
+
     account = db.query(GmailAccount).filter(
         GmailAccount.id == account_id
     ).first()
 
     if not account:
-
-        # Invalid session
-        request.session.clear()
-
         return {
             "authenticated": False
         }
@@ -490,6 +525,7 @@ def google_callback(request: Request , db: Session = Depends(get_db)):
         
         # Save account ID in session
         request.session["gmail_account_id"] = account.id
+        access_token = create_access_token(account.id)
 
         print(
         "[OK] Gmail account ID saved in session:",
@@ -524,9 +560,9 @@ def google_callback(request: Request , db: Session = Depends(get_db)):
     )
 
     return RedirectResponse(
-    url="https://email-forensic.vercel.app/dashboard",
+    url=f"https://email-forensic.vercel.app/dashboard?token={access_token}",
     status_code=303
-    )
+)
 
     # ==================================================
     # SUCCESS

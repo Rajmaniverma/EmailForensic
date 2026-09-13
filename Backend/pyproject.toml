@@ -20,6 +20,7 @@ dependencies = [
     "pydantic>=2.13.5",
     "pymysql>=1.2.0",
     "python-dotenv>=1.2.3",
+    "python-jose[cryptography]>=3.5.0",
     "python-multipart>=0.0.32",
     "requests>=2.34.2",
     "router>=0.1",

@@ -9,38 +9,51 @@ function Login() {
 
   const [checkingAuth, setCheckingAuth] = useState(true);
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await fetch(`https://emailforensic.onrender.com/auth/status`, {
-          method: "GET",
-          credentials: "include",
-        });
+useEffect(() => {
+  const checkAuth = async () => {
+    try {
+      const token = localStorage.getItem("access_token");
 
-        if (!response.ok) {
-          throw new Error("Failed to check authentication");
-        }
-
-        const data = await response.json();
-        console.log(data)
-
-        console.log("Auth status:", data);
-
-        if (data.authenticated === true) {
-          // User is already logged in
-          navigate("/dashboard", { replace: true });
-          return;
-
-        }
-      } catch (error) {
-        console.error("Auth check failed:", error);
-      } finally {
+      if (!token) {
         setCheckingAuth(false);
+        return;
       }
-    };
 
-    checkAuth();
-  }, [navigate]);
+      const response = await fetch(
+        "https://emailforensic.onrender.com/auth/status",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to check authentication");
+      }
+
+      const data = await response.json();
+
+      console.log("Auth status:", data);
+
+      if (data.authenticated === true) {
+        navigate("/dashboard", { replace: true });
+        return;
+      }
+
+      // Token is invalid
+      localStorage.removeItem("access_token");
+
+    } catch (error) {
+      console.error("Auth check failed:", error);
+    } finally {
+      setCheckingAuth(false);
+    }
+  };
+
+  checkAuth();
+}, [navigate]);
 
   const handleGoogleLogin = () => {
     window.location.href = `${API_URL}/auth/login`;

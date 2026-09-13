@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import "./Dashboard.css";
 
 const API_URL =" https://emailforensic.onrender.com";
@@ -9,6 +10,17 @@ function Dashboard() {
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token");
+  if (token) {
+    localStorage.setItem("access_token", token);
+
+    window.history.replaceState(
+        {},
+        document.title,
+        "/dashboard"
+    );
+}
 
   useEffect(() => {
     const checkAuth = async () => {
