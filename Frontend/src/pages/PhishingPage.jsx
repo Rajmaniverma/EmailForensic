@@ -321,7 +321,7 @@ export default function PhishingPage() {
 
         const data =
           await response.json();
-
+        console.log("the phising data is ",data)
         if (!response.ok) {
           throw new Error(
             data?.detail ||

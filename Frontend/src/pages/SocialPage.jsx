@@ -347,7 +347,7 @@ export default function SocialPage() {
 
         const data =
           await response.json();
-
+        console.log("fetch the social page: ", data)
 
         if (!response.ok) {
 
