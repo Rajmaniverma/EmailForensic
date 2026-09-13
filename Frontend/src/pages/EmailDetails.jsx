@@ -811,6 +811,7 @@ useEffect(() => {
             </button>
 
             <button
+            
               onClick={() => navigate(`/analyzer?message_id=${encodeURIComponent(messageId)}`)}
               className={securitySidebarClass}
             >
