@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./style1.css" />
+    <title>frontend</title>
+
+  </head>
+  <body>
+    <div id="root"></div>
+    
+
+
+  <div class="terminal-container">
+    <!-- Header -->
+    <header class="terminal-header">
+      <div class="brand">
+        <div class="brand-title">SENTINEL AI</div>
+        <div class="brand-subtitle">AI-Powered Email Threat Detection &amp Forensic Intelligence</div>
+      </div>
+      <div class="status-indicator">
+        SYSTEM <span class="status-dot">●</span><span class="status-text">ONLINE</span> 
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="terminal-body">
+      <!-- Sidebar Navigation -->
+      <nav class="sidebar">
+        <div class="nav-title">Dashboard</div>
+        <ul class="nav-list">
+          <li class="nav-item active"><a href="#">Analyze Email</a></li>
+          <li class="nav-item"><a href="#">Threats</a></li>
+          <li class="nav-item"><a href="#">Forensics</a></li>
+          <li class="nav-item"><a href="#">GeoLocation</a></li>
+          <li class="nav-item"><a href="#">History</a></li>
+        </ul>
+      </nav>
+
+      <!-- Threat Content Panel -->
+      <main class="content-area">
+        <!-- Threat Overview Cards -->
+        <section>
+          <div class="section-heading">THREAT OVERVIEW</div>
+          <div class="overview-grid">
+<div class="card risk-card">
+
+    <div class="risk-circle" id="riskCircle">
+        <div class="risk-circle-inner">
+            <div class="score-value" id="riskScore">58</div>
+            <div class="score-total">/100</div>
+        </div>
+    </div>
+
+    <div class="badge-amber" id="riskLabel">MEDIUM RISK</div>
+
+</div>
+           <div class="card threat-card">
+
+    <div class="warning-triangle">
+        !
+    </div>
+
+ <div class="badge-alert">THREAT DETECTED</div>
+    <div class="sub-alert">Social Engineering</div>
+
+</div> 
+          </div>
+        </section>
+
+        <!-- Social Engineering Indicators -->
+        <section>
+          <div class="section-heading">SOCIAL ENGINEERING INDICATORS</div>
+          <div class="indicator-group">
+            <div class="indicator-row">
+              <span class="indicator-name">URGENCY</span>
+              <span class="status-tag detected">● DETECTED</span>
+            </div>
+            <div class="indicator-row">
+              <span class="indicator-name">REWARD</span>
+              <span class="status-tag detected">● DETECTED</span>
+            </div>
+            <div class="indicator-row">
+              <span class="indicator-name">AUTHORITY</span>
+              <span class="status-tag clear">● CLEAR</span>
+            </div>
+            <div class="indicator-row">
+              <span class="indicator-name">FEAR</span>
+              <span class="status-tag clear">● CLEAR</span>
+            </div>
+            <div class="indicator-row">
+              <span class="indicator-name">SECRECY</span>
+              <span class="status-tag clear">● CLEAR</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Threat Evidence -->
+        <section>
+          <div class="section-heading">THREAT EVIDENCE</div>
+          <ul class="evidence-list">
+            <li class="evidence-item">⚠ Registration Deadline: 25 Sept 2026</li>
+            <li class="evidence-item">⚠ Early Bird Discount: 20%</li>
+            <li class="evidence-item">⚠ Referral Code: EARLY26</li>
+          </ul>
+        </section>
+
+        <!-- Analysis -->
+        <section>
+          <div class="section-heading">ANALYSIS</div>
+          <p class="analysis-text">
+            The email uses deadline pressure and discount incentives to persuade recipients to register quickly.
+          </p>
+        </section>
+
+        <!-- Recommendations -->
+        <section>
+          <div class="section-heading">RECOMMENDATION</div>
+          <ul class="rec-list">
+            <li class="rec-item">✓ Verify sender domain and links</li>
+            <li class="rec-item">✓ Confirm through official website</li>
+            <li class="rec-item">✓ Use trusted payment channels</li>
+          </ul>
+        </section>
+      </main>
+    </div>
+  </div>
+
+</body>
+</html>
+
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
