@@ -1,4 +1,7 @@
 import json
+import os
+
+from jose import jwt
 
 from typing import Optional
 
@@ -30,7 +33,8 @@ from Social_Engineering import analyze_social_engineering
 
 router = APIRouter()
 
-
+JWT_SECRET = os.getenv("JWT_SECRET")
+JWT_ALGORITHM = "HS256"
 # =========================================
 # GOOGLE SCOPES
 # =========================================
@@ -47,79 +51,7 @@ SCOPES = [
 # GET GMAIL CLIENT
 # =========================================
 
-def get_gmail_client(
-    request: Request,
-    db: Session
-):
-    """
-    Get the logged-in Gmail account from session,
-    retrieve its OAuth token from MySQL,
-    and create a Gmail API client.
-    """
 
-    # -------------------------------------
-    # 1. Get account ID from session
-    # -------------------------------------
-
-    account_id = request.session.get(
-        "gmail_account_id"
-    )
-
-    if not account_id:
-        raise HTTPException(
-            status_code=401,
-            detail="Gmail account not connected"
-        )
-
-    # -------------------------------------
-    # 2. Get account from database
-    # -------------------------------------
-
-    account = db.query(GmailAccount).filter(
-        GmailAccount.id == account_id
-    ).first()
-
-    if not account:
-        raise HTTPException(
-            status_code=404,
-            detail="Gmail account not found"
-        )
-
-    # -------------------------------------
-    # 3. Get OAuth token from database
-    # -------------------------------------
-
-    try:
-        token_data = json.loads(
-            account.google_token
-        )
-
-    except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=500,
-            detail="Invalid Google token stored in database"
-        )
-
-    # -------------------------------------
-    # 4. Recreate Google credentials
-    # -------------------------------------
-
-    credentials = Credentials.from_authorized_user_info(
-        token_data,
-        SCOPES
-    )
-
-    # -------------------------------------
-    # 5. Create Gmail API client
-    # -------------------------------------
-
-    gmail = build(
-        "gmail",
-        "v1",
-        credentials=credentials
-    )
-
-    return gmail, account
 
 
 # =========================================
@@ -692,41 +624,7 @@ def sync_messages(
         "count": len(saved_messages),
         "messages": saved_messages
     }
-def get_gmail_client(request: Request, db: Session):
 
-    account_id = request.session.get("gmail_account_id")
-
-    if not account_id:
-        raise HTTPException(
-            status_code=401,
-            detail="Gmail account not connected"
-        )
-
-    account = db.query(GmailAccount).filter(
-        GmailAccount.id == account_id
-    ).first()
-
-    if not account:
-        raise HTTPException(
-            status_code=404,
-            detail="Gmail account not found"
-        )
-
-    # Token comes from MySQL
-    token_data = json.loads(account.google_token)
-
-    credentials = Credentials.from_authorized_user_info(
-        token_data,
-        SCOPES
-    )
-
-    gmail = build(
-        "gmail",
-        "v1",
-        credentials=credentials
-    )
-
-    return gmail, account
 
 
 @router.get("/message/{message_id}")
@@ -924,3 +822,129 @@ def get_email_by_message_id(
             status_code=500,
             detail=f"Failed to fetch/analyze email: {str(e)}"
         )
+def get_gmail_client(
+    request: Request,
+    db: Session
+):
+    """
+    Get the authenticated Gmail account using JWT,
+    retrieve its Google OAuth token from MySQL,
+    and create a Gmail API client.
+    """
+
+    # =========================================
+    # 1. GET JWT FROM AUTHORIZATION HEADER
+    # =========================================
+
+    authorization = request.headers.get("Authorization")
+
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="Authorization token missing"
+        )
+
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authorization header"
+        )
+
+    token = authorization.split(" ", 1)[1]
+
+    # =========================================
+    # 2. DECODE JWT
+    # =========================================
+
+    try:
+        payload = jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM]
+        )
+
+        account_id = payload.get("account_id")
+
+        if not account_id:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authentication token"
+            )
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication token expired"
+        )
+
+    except jwt.JWTError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authentication token"
+        )
+
+    # =========================================
+    # 3. GET ACCOUNT FROM MYSQL
+    # =========================================
+
+    account = db.query(GmailAccount).filter(
+        GmailAccount.id == account_id
+    ).first()
+
+    if not account:
+        raise HTTPException(
+            status_code=404,
+            detail="Gmail account not found"
+        )
+
+    # =========================================
+    # 4. CHECK GOOGLE TOKEN
+    # =========================================
+
+    if not account.google_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Gmail account not connected"
+        )
+
+    try:
+        token_data = json.loads(account.google_token)
+
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=500,
+            detail="Invalid Google token stored in database"
+        )
+
+    # =========================================
+    # 5. CREATE GOOGLE CREDENTIALS
+    # =========================================
+
+    try:
+        credentials = Credentials.from_authorized_user_info(
+            token_data,
+            SCOPES
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create Google credentials: {str(e)}"
+        )
+
+    # =========================================
+    # 6. CREATE GMAIL CLIENT
+    # =========================================
+
+    try:
+        gmail = build(
+            "gmail",
+            "v1",
+            credentials=credentials
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create Gmail client: {str(e)}"
+        )
+
+    return gmail, account
