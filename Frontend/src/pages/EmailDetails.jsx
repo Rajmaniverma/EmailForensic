@@ -1760,7 +1760,7 @@ useEffect(() => {
                       >
                         {analysis?.loading
                           ? "Locked"
-                          : tool.key === "analyze"
+                          : tool.key === "analyzer"
                           ? "Open Email Analyzer"
                           : "Open"}
                       </button>
