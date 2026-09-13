@@ -1,72 +1,23 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 const API_URL = "https://emailforensic.onrender.com";
 
-// =====================================================
-// ANALYSIS TOOLS
-// =====================================================
-
-const ANALYSIS_TOOLS = [
-  {
-    key: "analyze",
-    label: "Email Analyzer",
-    description: "General forensic analysis of this email.",
-    icon: "🔍",
-    page: "/analyzer",
-  },
-  {
-    key: "phishing",
-    label: "Phishing Detection",
-    description: "Check this email for phishing indicators.",
-    icon: "🎣",
-    page: "/phishing",
-  },
-  {
-    key: "social",
-    label: "Social Engineering",
-    description: "Look for manipulation and impersonation tactics.",
-    icon: "👥",
-    page: "/social",
-  },
-  {
-    key: "ip",
-    label: "IP Tracing",
-    description: "Trace the originating IP and network information.",
-    icon: "🌐",
-    page: "/ip-tracing",
-  },
-];
-// =====================================================
-// MAIN COMPONENT
-// =====================================================
-
-function EmailDetail() {
-  const { messageId } = useParams();
+function AnalyzerDashboard() {
   const navigate = useNavigate();
-  const [analysisProgress, setAnalysisProgress] = useState(0);
-const [analysis, setAnalysis] = useState(null);
-  const [email, setEmail] = useState(null);
+  const [searchParams] = useSearchParams();
+  const messageId = searchParams.get("message_id");
+
+  const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState("");
 
-  // Per-tool analysis state
-
-
-  // =====================================================
-  // TOKEN
-  // =====================================================
-
-  const getToken = () => {
-    return localStorage.getItem("access_token");
-  };
-
-  // =====================================================
-  // LOAD EMAIL
-  // =====================================================
+  const getToken = () => localStorage.getItem("access_token");
 
   useEffect(() => {
-    const loadEmail = async () => {
+    const loadCached = async () => {
       const token = getToken();
 
       if (!token) {
@@ -75,1901 +26,819 @@ const [analysis, setAnalysis] = useState(null);
       }
 
       if (!messageId) {
-        setError("No Gmail message ID was provided.");
+        setError("No message ID was provided.");
         setLoading(false);
         return;
       }
 
       try {
         const response = await fetch(
-          `${API_URL}/gmail/message/${encodeURIComponent(messageId)}`,
+          `${API_URL}/gmail/cached-analysis/${encodeURIComponent(messageId)}`,
           {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            headers: { Authorization: `Bearer ${token}` },
           }
         );
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch this email");
+        const result = await response.json();
+
+        if (response.ok && result.success && result.data) {
+          setAnalysis(result.data);
+        } else {
+          setAnalysis(null);
         }
-
-        const data = await response.json();
-
-        console.log("Gmail message detail:", data);
-
-        // Backend returns:
-        // {
-        //   success: true,
-        //   email: {...}
-        // }
-
-        setEmail(data.email || data.message || data);
       } catch (err) {
-        console.error("Email detail error:", err);
-        setError("This email couldn't be loaded.");
+        console.error("Analyzer dashboard cache error:", err);
+        setError("Unable to load the saved analysis.");
       } finally {
         setLoading(false);
       }
     };
 
-    loadEmail();
+    loadCached();
   }, [messageId, navigate]);
 
-  // =====================================================
-  // RUN ANALYSIS
-  // =====================================================
-
-const runAnalysis = async () => {
-  const token = getToken();
-
-  if (!token) {
-    navigate("/", { replace: true });
-    return;
-  }
-
-  if (!messageId) {
-    setError("No Gmail message ID was provided.");
-    return;
-  }
-
-  let progressTimers = [];
-
-  try {
-    setAnalysisProgress(5);
-
-    setAnalysis((prev) => ({
-      ...(prev || {}),
-      loading: true,
-      error: null,
-    }));
-
-    // The backend currently returns one complete response, so the browser
-    // cannot know the exact server-side percentage. This is a visual
-    // staged progress indicator and reaches 100% only after completion.
-    const progressSteps = [
-      [15, 700],
-      [30, 1400],
-      [45, 2200],
-      [60, 3200],
-      [75, 4500],
-      [88, 6500],
-      [94, 9000],
-    ];
-
-    progressTimers = progressSteps.map(([value, delay]) =>
-      setTimeout(() => {
-        setAnalysisProgress((current) =>
-          current < value ? value : current
-        );
-      }, delay)
-    );
-
-    const response = await fetch(
-      `${API_URL}/gmail/full-analysis/${encodeURIComponent(messageId)}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText || "Full analysis request failed");
-    }
-
-    const result = await response.json();
-
-    console.log("Full Analysis:", result);
-
-    if (!result.success || !result.data) {
-      throw new Error("Invalid analysis response");
-    }
-
-    progressTimers.forEach(clearTimeout);
-    setAnalysisProgress(100);
-
-    setAnalysis({
-      ...result.data,
-      loading: false,
-      error: null,
-    });
-  } catch (err) {
-    progressTimers.forEach(clearTimeout);
-    console.error("Full analysis error:", err);
-
-    setAnalysisProgress(0);
-
-    setAnalysis((prev) => ({
-      ...(prev || {}),
-      loading: false,
-      error: err.message || "Analysis failed.",
-    }));
-  }
-};
-
-useEffect(() => {
-  const fetchCachedAnalysis = async () => {
+  const runAnalysis = async () => {
     const token = getToken();
 
-    if (!token || !messageId) {
+    if (!token) {
+      navigate("/", { replace: true });
       return;
     }
 
+    if (!messageId) {
+      setError("No message ID was provided.");
+      return;
+    }
+
+    setAnalyzing(true);
+    setError("");
+    setProgress(5);
+
+    const timers = [
+      [15, 500],
+      [30, 1200],
+      [45, 2200],
+      [60, 3500],
+      [75, 5000],
+      [88, 7000],
+      [94, 9500],
+    ].map(([value, delay]) =>
+      setTimeout(() => {
+        setProgress((current) => Math.max(current, value));
+      }, delay)
+    );
+
     try {
       const response = await fetch(
-        `${API_URL}/gmail/cached-analysis/${encodeURIComponent(messageId)}`,
+        `${API_URL}/gmail/full-analysis/${encodeURIComponent(messageId)}`,
         {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
 
-      if (!response.ok) {
-        console.log("No cached analysis yet");
-        setAnalysis(null);
-        return;
-      }
-
       const result = await response.json();
 
-      console.log("Cached Analysis:", result);
-
-      if (result.success && result.data) {
-        setAnalysis(result.data);
-        setAnalysisProgress(100);
-      } else {
-        setAnalysis(null);
-        setAnalysisProgress(0);
+      if (!response.ok || !result.success || !result.data) {
+        throw new Error(
+          result.detail || result.message || "Analysis request failed."
+        );
       }
-    } catch (error) {
-      console.error("Cache fetch error:", error);
-      setAnalysis(null);
+
+      timers.forEach(clearTimeout);
+      setProgress(100);
+      setAnalysis(result.data);
+    } catch (err) {
+      timers.forEach(clearTimeout);
+      setProgress(0);
+      setError(err.message || "Analysis failed.");
+    } finally {
+      setAnalyzing(false);
     }
   };
 
-  fetchCachedAnalysis();
-}, [messageId]);
+  const email = analysis?.email || analysis?.email_data || {};
+  const detection =
+    analysis?.detection_engine ||
+    analysis?.Detection_engine_data ||
+    {};
+  const phishing = analysis?.phishing || {};
+  const social = analysis?.social || {};
+  const ip = analysis?.ip_tracing || {};
 
-// =====================================================
-  // LOADING
-  // =====================================================
+  const phishingScore = Number(phishing?.phishing_score || 0);
+  const legitimateScore = Number(phishing?.legitimate_score || 0);
+  const socialScore = Number(
+    social?.social_engineering_score ?? social?.score ?? 0
+  );
 
-  if (loading) {
-    return (
-<div className="h-screen w-full flex flex-col items-center justify-center bg-[#f6f8fc] text-[#5f6368]">
+  const overallRisk = useMemo(() => {
+    if (phishingScore >= 70 || socialScore >= 70) {
+      return {
+        label: "High Risk",
+        text: "Strong indicators of malicious or manipulative behavior were detected.",
+        className: "bg-[#fce8e6] text-[#c5221f] border-[#f5c2c0]",
+        dot: "bg-[#d93025]",
+      };
+    }
 
-  {/* Animated Email Icon */}
-  <div className="relative mb-5">
+    if (phishingScore >= 40 || socialScore >= 40) {
+      return {
+        label: "Suspicious",
+        text: "Some security indicators require additional verification.",
+        className: "bg-[#fef7e0] text-[#b06000] border-[#f6d98b]",
+        dot: "bg-[#f9ab00]",
+      };
+    }
 
-    {/* Soft pulse */}
-    <div className="absolute inset-0 rounded-full bg-[#1a73e8]/10 animate-ping" />
+    return {
+      label: "Low Risk",
+      text: "No strong phishing or social-engineering score was detected.",
+      className: "bg-[#e6f4ea] text-[#137333] border-[#b7dfc2]",
+      dot: "bg-[#1e8e3e]",
+    };
+  }, [phishingScore, socialScore]);
 
-    {/* Envelope */}
-    <div className="relative w-14 h-14 rounded-2xl bg-white shadow-md flex items-center justify-center">
-      <svg
-        className="w-7 h-7 text-[#1a73e8]"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      >
-        <rect
-          x="3"
-          y="5"
-          width="18"
-          height="14"
-          rx="2"
-        />
+  const detectionPrediction =
+    detection?.prediction ??
+    detection?.result ??
+    detection?.label ??
+    "Unavailable";
 
-        <path
-          d="M3.5 7L12 13L20.5 7"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </div>
-  </div>
+  const aiAnalysis = safeJson(
+    detection?.ai_analysis ||
+      phishing?.ai_analysis ||
+      {}
+  );
 
-  {/* Text */}
-  <p className="text-sm font-medium text-[#3c4043]">
-    Opening email
-  </p>
-
-  {/* Animated dots */}
-  <div className="flex gap-1 mt-2">
-    <span className="w-1.5 h-1.5 rounded-full bg-[#1a73e8] animate-bounce [animation-delay:-0.3s]" />
-    <span className="w-1.5 h-1.5 rounded-full bg-[#1a73e8] animate-bounce [animation-delay:-0.15s]" />
-    <span className="w-1.5 h-1.5 rounded-full bg-[#1a73e8] animate-bounce" />
-  </div>
-
-</div>
-    );
-  }
-
-  // =====================================================
-  // EMAIL DATA
-  // =====================================================
-
-  const subject =
-    email?.subject ||
-    email?.name ||
-    "(No subject)";
-
-  const from =
-    email?.from ||
-    email?.sender ||
-    "Unknown sender";
-
-  const senderName =
-    email?.sender_name ||
-    email?.from_name ||
-    extractSenderName(from);
-
-  const senderEmail =
-    email?.sender_email ||
-    extractEmail(from);
-
-  const date =
-    email?.date ||
-    "";
-
-  // Plain-text fallback
-  const body =
-    email?.body ||
-    email?.plain_text ||
-    email?.text ||
-    email?.snippet ||
-    "";
-
-  // =====================================================
-  // ORIGINAL HTML EMAIL
-  // =====================================================
-
-  const htmlBody =
-    email?.html_body ||
-    email?.html ||
-    email?.body_html ||
-    "";
-
+  const urls = Array.isArray(email?.urls) ? email.urls : [];
   const attachments = Array.isArray(email?.attachments)
     ? email.attachments
     : [];
 
-  // =====================================================
-  // RENDER
-  // =====================================================
+  const openTool = (path) => {
+    if (!messageId) return;
+    navigate(`${path}?message_id=${encodeURIComponent(messageId)}`);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#f6f8fc] flex items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-white shadow-md flex items-center justify-center">
+            <span className="text-2xl animate-pulse">🛡️</span>
+          </div>
+          <p className="mt-4 text-sm font-medium text-[#3c4043]">
+            Preparing Analyzer Dashboard
+          </p>
+          <p className="mt-1 text-xs text-[#80868b]">
+            Loading the temporary security report...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div
-      className="
-        h-screen
-        w-full
-        flex
-        flex-col
-        bg-[#f6f8fc]
-        text-[#202124]
-        font-sans
-        overflow-hidden
-      "
-    >
-
-      {/* =================================================
-          GMAIL TOP HEADER
-      ================================================== */}
-
-      <header
-        className="
-          h-[64px]
-          min-h-[64px]
-          flex
-          items-center
-          px-4
-          bg-[#f6f8fc]
-        "
-      >
-
-        {/* ---------------------------------------------
-            MENU + GMAIL LOGO
-        ---------------------------------------------- */}
-
-        <div
-          className="
-            flex
-            items-center
-            gap-3
-            w-[250px]
-            shrink-0
-          "
-        >
-
+    <div className="min-h-screen bg-[#f6f8fc] text-[#202124] font-sans">
+      {/* Header */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-[#e5e7eb]">
+        <div className="max-w-[1500px] mx-auto px-5 lg:px-8 h-[72px] flex items-center gap-4">
           <button
-            className="
-              w-10
-              h-10
-              rounded-full
-              flex
-              items-center
-              justify-center
-              border-none
-              bg-transparent
-              text-[#5f6368]
-              text-xl
-              cursor-pointer
-              hover:bg-[#e8eaed]
-            "
-            aria-label="Main menu"
+            onClick={() => navigate(-1)}
+            className="w-10 h-10 rounded-full flex items-center justify-center text-[#5f6368] hover:bg-[#f1f3f4] transition"
+            title="Go back"
           >
-            ☰
+            ←
           </button>
 
-          {/* Gmail-style logo */}
+          <div className="w-11 h-11 rounded-2xl bg-[#e8f0fe] flex items-center justify-center">
+            <span className="text-xl">🛡️</span>
+          </div>
 
-          <div className="flex items-center gap-2">
-
-            <div
-              className="
-                text-3xl
-                font-bold
-                leading-none
-                bg-gradient-to-r
-                from-[#4285f4]
-                via-[#ea4335]
-                to-[#34a853]
-                bg-clip-text
-                text-transparent
-              "
-            >
-              M
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-[#202124]">
+                Analyzer Dashboard
+              </h1>
+              <span className="px-2 py-0.5 rounded-full bg-[#e6f4ea] text-[#137333] text-[10px] font-bold uppercase tracking-wide">
+                MailGuard
+              </span>
             </div>
+            <p className="text-xs text-[#5f6368] truncate max-w-[620px]">
+              Unified forensic security report for this email
+            </p>
+          </div>
 
-            <span
-              className="
-                text-[22px]
-                text-[#3c4043]
-                font-normal
-              "
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => openTool("/email/" + encodeURIComponent(messageId))}
+              className="hidden sm:inline-flex px-4 py-2 rounded-lg border border-[#dadce0] bg-white text-xs font-medium text-[#3c4043] hover:bg-[#f8f9fa]"
             >
-              Gmail
-            </span>
+              View Email
+            </button>
 
+            <button
+              onClick={runAnalysis}
+              disabled={analyzing}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#1a73e8] text-white text-xs font-semibold hover:bg-[#1765cc] disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+            >
+              <span>{analyzing ? "⟳" : "⚡"}</span>
+              {analyzing ? "Analyzing..." : analysis ? "Re-run Analysis" : "Analyze Email"}
+            </button>
           </div>
-
         </div>
-
-
-        {/* ---------------------------------------------
-            SEARCH
-        ---------------------------------------------- */}
-
-        <div
-          className="
-            hidden
-            md:flex
-            flex-1
-            max-w-[820px]
-            h-[48px]
-            items-center
-            px-4
-            bg-[#e9eef6]
-            rounded-full
-          "
-        >
-
-          <span className="text-[#5f6368] text-xl">
-            🔍
-          </span>
-
-          <input
-            type="text"
-            placeholder="Search mail"
-            className="
-              flex-1
-              ml-3
-              bg-transparent
-              outline-none
-              border-none
-              text-sm
-              text-[#202124]
-              placeholder:text-[#5f6368]
-            "
-          />
-
-          <button
-            className="
-              w-9
-              h-9
-              flex
-              items-center
-              justify-center
-              rounded-full
-              border-none
-              bg-transparent
-              text-[#5f6368]
-              hover:bg-[#dfe5ee]
-              cursor-pointer
-            "
-            title="Search options"
-          >
-            ☷
-          </button>
-
-        </div>
-
-
-        {/* ---------------------------------------------
-            RIGHT HEADER
-        ---------------------------------------------- */}
-
-        <div
-          className="
-            ml-auto
-            flex
-            items-center
-            gap-1
-          "
-        >
-
-          <button
-            className={headerButtonClass}
-            title="Help"
-          >
-            ?
-          </button>
-
-          <button
-            className={headerButtonClass}
-            title="Settings"
-          >
-            ⚙
-          </button>
-
-          <button
-            className={headerButtonClass}
-            title="Google apps"
-          >
-            ✦
-          </button>
-
-          <button
-            className={headerButtonClass}
-            title="More"
-          >
-            ⋮⋮
-          </button>
-
-          <div
-            className="
-              ml-2
-              w-9
-              h-9
-              rounded-full
-              bg-[#137333]
-              text-white
-              flex
-              items-center
-              justify-center
-              font-medium
-              border-2
-              border-[#aecbfa]
-            "
-          >
-            R
-          </div>
-
-        </div>
-
       </header>
 
-
-      {/* =================================================
-          MAIN GMAIL AREA
-      ================================================== */}
-
-      <div
-        className="
-          flex-1
-          min-h-0
-          flex
-        "
-      >
-
-        {/* =================================================
-            LEFT SIDEBAR
-        ================================================== */}
-
-        <aside
-          className="
-            hidden
-            lg:flex
-            w-[250px]
-            shrink-0
-            flex-col
-            bg-[#f6f8fc]
-            px-2
-            overflow-y-auto
-          "
-        >
-
-          {/* Compose */}
-
-          <button
-            onClick={() => navigate(`/analyzer?message_id=${encodeURIComponent(messageId)}`)}
-            className="
-              w-fit
-              min-w-[150px]
-              h-[56px]
-              px-5
-              mb-4
-              flex
-              items-center
-              gap-3
-              rounded-2xl
-              border-none
-              bg-[#c2e7ff]
-              text-[#001d35]
-              text-sm
-              font-medium
-              cursor-pointer
-              hover:shadow-md
-              transition-shadow
-            "
-          >
-            <span className="text-xl">
-              ✎
-            </span>
-
-            Compose
-          </button>
-
-
-          {/* Inbox */}
-
-          <button
-            className="
-              h-9
-              w-full
-              flex
-              items-center
-              gap-4
-              px-4
-              rounded-r-full
-              border-none
-              bg-[#d3e3fd]
-              text-[#001d35]
-              text-sm
-              font-medium
-              text-left
-            "
-          >
-            <span>
-              📥
-            </span>
-
-            <span className="flex-1">
-              Inbox
-            </span>
-
-            <span className="font-semibold">
-              1,797
-            </span>
-          </button>
-
-
-          <SidebarItem
-            icon="☆"
-            label="Starred"
-          />
-
-          <SidebarItem
-            icon="◷"
-            label="Snoozed"
-          />
-
-          <SidebarItem
-            icon="➤"
-            label="Sent"
-          />
-
-          <SidebarItem
-            icon="📝"
-            label="Drafts"
-            count="1"
-            bold
-          />
-
-          <SidebarItem
-            icon="🛍"
-            label="Purchases"
-            count="5"
-            bold
-          />
-
-          <SidebarItem
-            icon="⌄"
-            label="More"
-          />
-
-
-          {/* Labels */}
-
-          <div className="mt-7 px-4">
-
-            <div
-              className="
-                flex
-                items-center
-                justify-between
-                mb-3
-              "
-            >
-
-              <span className="font-medium text-sm">
-                Labels
-              </span>
-
-              <button
-                className="
-                  text-xl
-                  text-[#5f6368]
-                  border-none
-                  bg-transparent
-                  cursor-pointer
-                "
-              >
-                +
-              </button>
-
-            </div>
-
-          </div>
-
-
-          {/* MailGuard */}
-
-          <div
-            className="
-              mt-3
-              px-3
-              pb-5
-            "
-          >
-
-            <div
-              className="
-                flex
-                items-center
-                gap-2
-                px-2
-                pb-3
-                mb-2
-                border-b
-                border-[#dadce0]
-                text-sm
-                font-semibold
-                text-[#1e7e5a]
-              "
-            >
-              🛡
-              MailGuard Security
-            </div>
-
-
-            <button
-              onClick={() => navigate(`/phishing?message_id=${encodeURIComponent(messageId)}`)}
-              className={securitySidebarClass}
-            >
-              🎣
-              Phishing Detection
-            </button>
-
-            <button
-              onClick={() => navigate(`/social?message_id=${encodeURIComponent(messageId)}`)}
-              className={securitySidebarClass}
-            >
-              👥
-              Social Analysis
-            </button>
-
-            <button
-              onClick={() =>
-                navigate(
-                  `/ip-tracing?message_id=${encodeURIComponent(
-                    messageId
-                  )}`
-                )
-              }
-              className={securitySidebarClass}
-            >
-              🌐
-              IP Tracing
-            </button>
-
-            <button
-            
-              onClick={() => navigate(`/analyzer?message_id=${encodeURIComponent(messageId)}`)}
-              className={securitySidebarClass}
-            >
-              🔍
-              Email Analyzer
-            </button>
-
-          </div>
-
-        </aside>
-
-
-        {/* =================================================
-            EMAIL + SECURITY
-        ================================================== */}
-
-        <div
-          className="
-            flex-1
-            min-w-0
-            flex
-            flex-col
-            overflow-hidden 
-
-          "
-        >
-
-          {/* =================================================
-              GMAIL MESSAGE TOOLBAR
-          ================================================== */}
-
-          <div
-            className="
-              h-14
-              min-h-[56px]
-              flex
-              items-center
-              justify-between
-              px-4
-              bg-white
-              border-b
-              border-[#e5e7eb]
-            "
-          >
-
-            <div className="flex items-center gap-1">
-
-              {/* Back */}
-
-              <button
-                onClick={() => navigate("/dashboard")}
-                className={messageToolbarButton}
-                title="Back to Inbox"
-              >
-                ←
-              </button>
-
-
-              {/* Archive */}
-
-              <button
-                className={messageToolbarButton}
-                title="Archive"
-              >
-                ▣
-              </button>
-
-
-              {/* Report spam */}
-
-              <button
-                className={messageToolbarButton}
-                title="Report spam"
-              >
-                !
-              </button>
-
-
-              {/* Delete */}
-
-              <button
-                className={messageToolbarButton}
-                title="Delete"
-              >
-                🗑
-              </button>
-
-
-              <div className="h-6 w-px bg-[#dadce0] mx-2" />
-
-
-              {/* Mark unread */}
-
-              <button
-                className={messageToolbarButton}
-                title="Mark as unread"
-              >
-                ✉
-              </button>
-
-
-              {/* Snooze */}
-
-              <button
-                className={messageToolbarButton}
-                title="Snooze"
-              >
-                ◷
-              </button>
-
-
-              {/* More */}
-
-              <button
-                className={messageToolbarButton}
-                title="More"
-              >
-                ⋮
-              </button>
-
-            </div>
-
-
-            {/* Right */}
-
-            <div className="flex items-center gap-1">
-
-              <button
-                className={messageToolbarButton}
-                title="Previous"
-              >
-                ‹
-              </button>
-
-              <button
-                className={messageToolbarButton}
-                title="Next"
-              >
-                ›
-              </button>
-
-            </div>
-
-          </div>
-
-
-          {/* =================================================
-              MESSAGE AREA
-          ================================================== */}
-
-          <div
-            className="
-              flex-1
-              min-h-0
-              flex
-              gap-4
-              p-0
-              overflow-hidden
-            "
-          >
-
-            {/* =================================================
-                ORIGINAL GMAIL MESSAGE
-            ================================================== */}
-
-            <main
-              className="
-                flex-1
-                min-w-0
-                bg-white
-                overflow-y-auto
-              "
-            >
-
-              {error ? (
-
-                <div
-                  className="
-                    p-8
-                    text-sm
-                    text-[#c5221f]
-                  "
-                >
-                  {error}
+      <main className="max-w-[1500px] mx-auto px-5 lg:px-8 py-7">
+        {/* Hero */}
+        <section className="rounded-3xl overflow-hidden bg-[#102a56] text-white shadow-sm">
+          <div className="p-6 lg:p-8">
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+              <div>
+                <div className="flex items-center gap-2 text-[#b9d3ff] text-xs font-semibold uppercase tracking-[0.16em]">
+                  <span className="w-2 h-2 rounded-full bg-[#34a853]" />
+                  Security intelligence
                 </div>
-
-              ) : (
-
-                <article className="w-full">
-
-                  {/* =========================================
-                      SUBJECT
-                  ========================================== */}
-
-                  <div
-                    className="
-                      px-6
-                      md:px-10
-                      pt-7
-                    "
-                  >
-
-                    <div
-                      className="
-                        flex
-                        items-center
-                        gap-2
-                        flex-wrap
-                      "
-                    >
-
-                      <h1
-                        className="
-                          text-[24px]
-                          md:text-[26px]
-                          font-normal
-                          text-[#202124]
-                          leading-tight
-                          break-words
-                        "
-                      >
-                        {subject}
-                      </h1>
-
-
-                      <span
-                        className="
-                          px-2
-                          py-1
-                          rounded
-                          bg-[#e8eaed]
-                          text-[11px]
-                          text-[#5f6368]
-                        "
-                      >
-                        Inbox
-                      </span>
-
-                    </div>
-
-                  </div>
-
-
-                  {/* =========================================
-                      SENDER HEADER
-                  ========================================== */}
-
-                  <div
-                    className="
-                      px-6
-                      md:px-10
-                      py-5
-                      flex
-                      items-start
-                      gap-4
-                    "
-                  >
-
-                    {/* Avatar */}
-
-                    <div
-                      className="
-                        w-10
-                        h-10
-                        shrink-0
-                        rounded-full
-                        bg-[#1a73e8]
-                        text-white
-                        flex
-                        items-center
-                        justify-center
-                        font-medium
-                        text-lg
-                      "
-                    >
-                      {(senderName || "?")
-                        .charAt(0)
-                        .toUpperCase()}
-                    </div>
-
-
-                    {/* Sender */}
-
-                    <div className="flex-1 min-w-0">
-
-                      <div
-                        className="
-                          flex
-                          items-center
-                          gap-2
-                          flex-wrap
-                        "
-                      >
-
-                        <span
-                          className="
-                            font-medium
-                            text-sm
-                            text-[#202124]
-                          "
-                        >
-                          {senderName}
-                        </span>
-
-                        <span
-                          className="
-                            text-xs
-                            text-[#5f6368]
-                          "
-                        >
-                          &lt;{senderEmail}&gt;
-                        </span>
-
-                      </div>
-
-
-                      <div
-                        className="
-                          text-xs
-                          text-[#5f6368]
-                          mt-1
-                        "
-                      >
-                        to me
-                        <span className="ml-1">
-                          ▾
-                        </span>
-                      </div>
-
-                    </div>
-
-
-                    {/* Date */}
-
-                    <div
-                      className="
-                        hidden
-                        sm:block
-                        text-xs
-                        text-[#5f6368]
-                        whitespace-nowrap
-                      "
-                    >
-                      {formatDate(date)}
-                    </div>
-
-
-                    {/* Actions */}
-
-                    <div className="flex items-center gap-1">
-
-                      <button
-                        className={smallIconButton}
-                        title="Star"
-                      >
-                        ☆
-                      </button>
-
-                      <button
-                        className={smallIconButton}
-                        title="Reply"
-                      >
-                        ↩
-                      </button>
-
-                      <button
-                        className={smallIconButton}
-                        title="More"
-                      >
-                        ⋮
-                      </button>
-
-                    </div>
-
-                  </div>
-
-
-                  {/* =========================================
-                      ORIGINAL HTML EMAIL
-                  ========================================== */}
-
-                  <div
-                    className="
-                      px-6
-                      md:px-10
-                      pb-8
-                    "
-                  >
-
-                    {htmlBody ? (
-
-                      <div
-                        className="
-                          w-full
-                          bg-white
-                          overflow-hidden
-                        "
-                      >
-
-                        <iframe
-                          title="Original Gmail Email"
-                          srcDoc={htmlBody}
-                          sandbox=""
-                          scrolling="no"
-                          className="
-                            block
-                            w-full
-                            min-h-[700px]
-                            border-0
-                            bg-white
-                          "
-                          onLoad={(event) => {
-
-                            try {
-
-                              const iframe =
-                                event.currentTarget;
-
-                              const iframeDocument =
-                                iframe.contentDocument ||
-                                iframe.contentWindow?.document;
-
-                              if (
-                                !iframeDocument ||
-                                !iframeDocument.body
-                              ) {
-                                return;
-                              }
-
-                              // Give the browser a moment
-                              // to finish rendering images
-                              setTimeout(() => {
-
-                                try {
-
-                                  const bodyHeight =
-                                    iframeDocument.body
-                                      .scrollHeight;
-
-                                  const documentHeight =
-                                    iframeDocument.documentElement
-                                      ?.scrollHeight || 0;
-
-                                  const height = Math.max(
-                                    bodyHeight,
-                                    documentHeight,
-                                    700
-                                  );
-
-                                  iframe.style.height =
-                                    `${height + 30}px`;
-
-                                } catch (error) {
-
-                                  console.error(
-                                    "Iframe resize error:",
-                                    error
-                                  );
-
-                                }
-
-                              }, 300);
-
-                            } catch (error) {
-
-                              console.error(
-                                "Unable to access email iframe:",
-                                error
-                              );
-
-                            }
-
-                          }}
-                        />
-
-                      </div>
-
-                    ) : body ? (
-
-                      /* ---------------------------------------
-                         PLAIN TEXT FALLBACK
-                      ---------------------------------------- */
-
-                      <div
-                        className="
-                          max-w-[900px]
-                          whitespace-pre-wrap
-                          break-words
-                          text-sm
-                          leading-7
-                          text-[#202124]
-                        "
-                      >
-                        {body}
-                      </div>
-
-                    ) : (
-
-                      <div
-                        className="
-                          py-10
-                          text-sm
-                          text-[#5f6368]
-                          italic
-                        "
-                      >
-                        This email has no body content available
-                        from the backend.
-                      </div>
-
-                    )}
-
-                  </div>
-
-
-                  {/* =========================================
-                      ATTACHMENTS
-                  ========================================== */}
-
-                  {attachments.length > 0 && (
-
-                    <div
-                      className="
-                        mx-6
-                        md:mx-10
-                        pt-5
-                        border-t
-                        border-[#e5e7eb]
-                      "
-                    >
-
-                      <div
-                        className="
-                          text-sm
-                          font-medium
-                          text-[#3c4043]
-                          mb-3
-                        "
-                      >
-                        {attachments.length} Attachment
-                        {attachments.length !== 1 ? "s" : ""}
-                      </div>
-
-
-                      <div
-                        className="
-                          flex
-                          flex-wrap
-                          gap-3
-                        "
-                      >
-
-                        {attachments.map(
-                          (att, index) => (
-
-                            <div
-                              key={index}
-                              className="
-                                min-w-[190px]
-                                max-w-[280px]
-                                flex
-                                items-center
-                                gap-3
-                                px-3
-                                py-3
-                                border
-                                border-[#dadce0]
-                                rounded-lg
-                                bg-white
-                                hover:bg-[#f8f9fa]
-                                cursor-pointer
-                              "
-                            >
-
-                              <span className="text-xl">
-                                📎
-                              </span>
-
-                              <div className="min-w-0">
-
-                                <div
-                                  className="
-                                    text-sm
-                                    font-medium
-                                    truncate
-                                  "
-                                >
-                                  {att.name ||
-                                    att.filename ||
-                                    `Attachment ${index + 1}`}
-                                </div>
-
-                                {att.size && (
-
-                                  <div
-                                    className="
-                                      text-xs
-                                      text-[#5f6368]
-                                      mt-1
-                                    "
-                                  >
-                                    {att.size}
-                                  </div>
-
-                                )}
-
-                              </div>
-
-                            </div>
-
-                          )
-                        )}
-
-                      </div>
-
-                    </div>
-
-                  )}
-
-
-                  {/* =========================================
-                      REPLY / FORWARD
-                  ========================================== */}
-
-                  <div
-                    className="
-                      px-6
-                      md:px-10
-                      py-8
-                      flex
-                      items-center
-                      gap-3
-                    "
-                  >
-
-                    <button
-                      className="
-                        flex
-                        items-center
-                        gap-2
-                        px-5
-                        py-2
-                        rounded-full
-                        border
-                        border-[#747775]
-                        bg-white
-                        text-sm
-                        text-[#3c4043]
-                        hover:bg-[#f1f3f4]
-                        cursor-pointer
-                      "
-                    >
-                      ↩
-                      Reply
-                    </button>
-
-
-                    <button
-                      className="
-                        flex
-                        items-center
-                        gap-2
-                        px-5
-                        py-2
-                        rounded-full
-                        border
-                        border-[#747775]
-                        bg-white
-                        text-sm
-                        text-[#3c4043]
-                        hover:bg-[#f1f3f4]
-                        cursor-pointer
-                      "
-                    >
-                      ↪
-                      Forward
-                    </button>
-
-                  </div>
-
-
-                  {/* =========================================
-                      MESSAGE ID
-                  ========================================== */}
-
-                  <div
-                    className="
-                      px-6
-                      md:px-10
-                      pb-8
-                      text-[11px]
-                      text-[#9aa0a6]
-                    "
-                  >
-                    Message ID:{" "}
-                    <code className="font-mono break-all">
-                      {messageId}
-                    </code>
-                  </div>
-
-                </article>
-
-              )}
-
-            </main>
-
-
-            {/* =================================================
-                MAILGUARD PANEL
-            ================================================== */}
-
-            <aside className="hidden xl:flex w-[340px] shrink-0 m-3  ml-0  rounded-xl  bg-white  border  border-[#e5e7eb]  shadow-sm  flex-col  overflow-hidden " >
-
-              {/* Header */}
-
-              <div
-                className="
-                  px-5
-                  py-4
-                  border-b
-                  border-[#e5e7eb]
-                  flex
-                  items-center
-                  gap-2
-                "
-              >
-
-                <span className="text-lg">
-                  🛡️
-                </span>
-
-                <div>
-
-                  <div
-                    className="
-                      text-sm
-                      font-semibold
-                      text-[#1e7e5a]
-                    "
-                  >
-                    MailGuard
-                  </div>
-
-                  <div
-                    className="
-                      text-xs
-                      text-[#5f6368]
-                    "
-                  >
-                    Security Analysis
-                  </div>
-
-                </div>
-
+                <h2 className="mt-3 text-2xl lg:text-4xl font-semibold tracking-tight">
+                  {email?.subject || "Email Security Report"}
+                </h2>
+                <p className="mt-2 text-sm text-[#d7e5ff]">
+                  {email?.from || "Sender unavailable"}
+                </p>
               </div>
 
+              <div className="rounded-2xl bg-white/10 border border-white/15 px-5 py-4 min-w-[220px]">
+                <div className="text-[10px] uppercase tracking-wider text-[#b9d3ff]">
+                  Current assessment
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${overallRisk.dot}`} />
+                  <span className="text-xl font-semibold">
+                    {overallRisk.label}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
 
-              {/* Tools */}
+          {analyzing && (
+            <div className="px-6 lg:px-8 pb-6">
+              <div className="rounded-2xl bg-white/10 border border-white/10 p-4">
+                <div className="flex items-center justify-between text-xs mb-2">
+                  <span className="text-[#d7e5ff]">
+                    Running unified analysis
+                  </span>
+                  <span className="font-bold">{progress}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-white/15 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-white transition-all duration-500"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
 
-              <div
-                className="
-                  flex-1
-                  overflow-y-auto
-                  p-4
-                  space-y-5
-                "
+        {error && (
+          <div className="mt-5 rounded-2xl border border-[#f5c2c0] bg-[#fce8e6] px-5 py-4 text-sm text-[#c5221f]">
+            {error}
+          </div>
+        )}
+
+        {!analysis && !analyzing && (
+          <section className="mt-6 rounded-3xl border border-[#d2e3fc] bg-white p-8 text-center shadow-sm">
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-[#e8f0fe] flex items-center justify-center text-3xl">
+              🔎
+            </div>
+            <h3 className="mt-4 text-xl font-semibold">
+              No analysis is cached for this email
+            </h3>
+            <p className="mt-2 max-w-xl mx-auto text-sm leading-6 text-[#5f6368]">
+              Run the analysis once. MailGuard will collect the forensic,
+              phishing, social-engineering and IP intelligence into this
+              dashboard.
+            </p>
+            <button
+              onClick={runAnalysis}
+              className="mt-5 px-6 py-3 rounded-xl bg-[#1a73e8] text-white text-sm font-semibold hover:bg-[#1765cc]"
+            >
+              Analyze This Email
+            </button>
+          </section>
+        )}
+
+        {analysis && (
+          <>
+            {/* Summary cards */}
+            <section className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <MetricCard
+                icon="🎣"
+                label="Phishing score"
+                value={`${phishingScore}%`}
+                helper={phishing?.prediction === 1 ? "Phishing indicators found" : "No strong phishing verdict"}
+                tone={phishingScore >= 70 ? "danger" : phishingScore >= 40 ? "warning" : "success"}
+              />
+              <MetricCard
+                icon="👥"
+                label="Social engineering"
+                value={`${socialScore}%`}
+                helper={social?.detected ? "Manipulation technique detected" : "No technique detected"}
+                tone={socialScore >= 70 ? "danger" : socialScore >= 40 ? "warning" : "success"}
+              />
+              <MetricCard
+                icon="🔗"
+                label="URLs discovered"
+                value={phishing?.features?.url_count ?? urls.length ?? 0}
+                helper={`${phishing?.features?.long_url_count ?? 0} long URL(s)`}
+                tone="blue"
+              />
+              <MetricCard
+                icon="🌐"
+                label="Origin IP"
+                value={ip?.ip || email?.origin_ip || "N/A"}
+                helper={ip?.country ? `${ip.city || ""}${ip.city ? ", " : ""}${ip.country}` : "Network location unavailable"}
+                tone="purple"
+              />
+            </section>
+
+            {/* Risk + quick actions */}
+            <section className="mt-6 grid grid-cols-1 xl:grid-cols-[1.35fr_0.65fr] gap-5">
+              <div className={`rounded-3xl border p-6 ${overallRisk.className}`}>
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-white/70 flex items-center justify-center text-2xl">
+                    {overallRisk.label === "High Risk" ? "🚨" : overallRisk.label === "Suspicious" ? "⚠️" : "✓"}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs uppercase tracking-wider font-bold opacity-70">
+                      Overall security posture
+                    </p>
+                    <h3 className="mt-1 text-2xl font-semibold">
+                      {overallRisk.label}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 opacity-85">
+                      {overallRisk.text}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <ScoreMini label="Phishing" value={phishingScore} />
+                  <ScoreMini label="Legitimate" value={legitimateScore} />
+                  <ScoreMini label="Social" value={socialScore} />
+                  <ScoreMini label="Threats" value={phishing?.features?.threat_count ?? 0} suffix="" />
+                </div>
+              </div>
+
+              <div className="rounded-3xl bg-white border border-[#e5e7eb] p-6 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[#80868b]">
+                      Investigation
+                    </p>
+                    <h3 className="mt-1 text-lg font-semibold">
+                      Security modules
+                    </h3>
+                  </div>
+                  <span className="text-xl">🧭</span>
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <ModuleButton icon="🎣" label="Phishing" onClick={() => openTool("/phishing")} />
+                  <ModuleButton icon="👥" label="Social" onClick={() => openTool("/social")} />
+                  <ModuleButton icon="🌐" label="IP Tracing" onClick={() => openTool("/ip-tracing")} />
+                  <ModuleButton icon="✉️" label="Email Detail" onClick={() => openTool("/email")} />
+                </div>
+              </div>
+            </section>
+
+            {/* Forensic intelligence */}
+            <section className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-5">
+              <Panel
+                title="Forensic signal"
+                subtitle="General detection engine output"
+                icon="🧬"
               >
+                <div className="grid grid-cols-2 gap-3">
+                  <InfoBox label="Prediction" value={String(detectionPrediction)} />
+                  <InfoBox
+                    label="Text length"
+                    value={phishing?.features?.text_length ?? "—"}
+                  />
+                  <InfoBox
+                    label="Credential signals"
+                    value={phishing?.features?.credential_count ?? 0}
+                  />
+                  <InfoBox
+                    label="Urgency signals"
+                    value={phishing?.features?.urgent_count ?? 0}
+                  />
+                  <InfoBox
+                    label="Suspicious TLDs"
+                    value={phishing?.features?.suspicious_tld_count ?? 0}
+                  />
+                  <InfoBox
+                    label="Reply-to mismatch"
+                    value={phishing?.features?.reply_to_mismatch ?? 0}
+                  />
+                </div>
 
-                {/* =========================================
-                    FULL ANALYSIS
-                ========================================== */}
-
-                <button
-                  onClick={runAnalysis}
-                  disabled={analysis?.loading}
-                  className="
-                    w-full
-                    px-4
-                    py-3
-                    rounded-xl
-                    bg-[#1a73e8]
-                    text-white
-                    text-sm
-                    font-medium
-                    hover:bg-[#1765cc]
-                    disabled:opacity-60
-                    disabled:cursor-not-allowed
-                    transition
-                  "
-                >
-                  {analysis?.loading
-                    ? "Analyzing email..."
-                    : analysis?.detection_engine ||
-                      analysis?.phishing ||
-                      analysis?.social ||
-                      analysis?.ip_tracing
-                    ? "Re-run Analysis"
-                    : "Analyze Email"}
-                </button>
-
-                {analysis?.loading && (
-                  <div className="mt-3 rounded-xl border border-[#d2e3fc] bg-[#f8fbff] p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-[#3c4043]">
-                        Running security analysis
-                      </span>
-                      <span className="text-xs font-bold text-[#1a73e8]">
-                        {analysisProgress}%
-                      </span>
+                {Object.keys(aiAnalysis || {}).length > 0 && (
+                  <div className="mt-5">
+                    <p className="text-xs font-semibold text-[#5f6368] mb-3">
+                      AI observations
+                    </p>
+                    <div className="space-y-2">
+                      {Object.entries(aiAnalysis).slice(0, 8).map(([key, value]) => (
+                        <div
+                          key={key}
+                          className="flex items-start justify-between gap-4 rounded-xl bg-[#f8f9fa] px-3 py-2.5"
+                        >
+                          <span className="text-xs font-medium text-[#3c4043]">
+                            {pretty(key)}
+                          </span>
+                          <span className="text-xs text-[#5f6368] text-right">
+                            {formatValue(value)}
+                          </span>
+                        </div>
+                      ))}
                     </div>
+                  </div>
+                )}
+              </Panel>
 
-                    <div className="w-full h-2 rounded-full bg-[#e8eaed] overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-[#1a73e8] transition-all duration-500 ease-out"
-                        style={{ width: `${analysisProgress}%` }}
-                      />
-                    </div>
+              <Panel
+                title="Phishing intelligence"
+                subtitle="Indicators extracted from the security model"
+                icon="🎣"
+              >
+                <div className="flex items-center justify-between rounded-2xl bg-[#f8f9fa] p-4">
+                  <div>
+                    <p className="text-xs text-[#80868b]">Verdict</p>
+                    <p className="mt-1 text-lg font-semibold">
+                      {phishing?.prediction === 1
+                        ? "Potential Phishing"
+                        : "No phishing verdict"}
+                    </p>
+                  </div>
+                  <div className="text-3xl font-bold text-[#1a73e8]">
+                    {phishingScore}%
+                  </div>
+                </div>
 
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="w-2 h-2 rounded-full bg-[#1a73e8] animate-pulse" />
-                      <span className="text-[11px] text-[#5f6368]">
-                        Please wait while MailGuard checks the email...
-                      </span>
+                <div className="mt-4 space-y-2">
+                  <Finding
+                    label="Suspicious sender"
+                    value={phishing?.features?.suspicious_sender_count ?? phishing?.ai_analysis?.suspicious_sender}
+                  />
+                  <Finding
+                    label="Lookalike domain"
+                    value={aiAnalysis?.lookalike_domain}
+                  />
+                  <Finding
+                    label="Malicious URLs"
+                    value={countValue(phishing?.features?.ip_url_count)}
+                  />
+                  <Finding
+                    label="Shortened URLs"
+                    value={countValue(phishing?.features?.shortened_url_count)}
+                  />
+                </div>
+              </Panel>
+            </section>
+
+            {/* Social + IP */}
+            <section className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-5">
+              <Panel
+                title="Social engineering"
+                subtitle="Behavioral manipulation and persuasion signals"
+                icon="👥"
+              >
+                <div className="grid grid-cols-3 gap-3">
+                  <InfoBox label="Detected" value={social?.detected ? "Yes" : "No"} />
+                  <InfoBox label="Risk impact" value={social?.risk_impact || "—"} />
+                  <InfoBox label="Score" value={`${socialScore}%`} />
+                </div>
+
+                {Array.isArray(social?.techniques) && social.techniques.length > 0 && (
+                  <div className="mt-5">
+                    <p className="text-xs font-semibold text-[#5f6368] mb-2">
+                      Techniques
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {social.techniques.map((item, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1.5 rounded-full bg-[#fef7e0] text-[#8a4b00] text-xs font-medium"
+                        >
+                          {item}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 )}
 
-                {ANALYSIS_TOOLS.map((tool) => {
+                {social?.explanation && (
+                  <div className="mt-5 rounded-2xl bg-[#f8f9fa] p-4">
+                    <p className="text-xs font-semibold text-[#5f6368] mb-1">
+                      Explanation
+                    </p>
+                    <p className="text-sm leading-6 text-[#3c4043]">
+                      {social.explanation}
+                    </p>
+                  </div>
+                )}
 
-                  const resultMap = {
-                    analyze: analysis?.detection_engine,
-                    phishing: analysis?.phishing,
-                    social: analysis?.social,
-                    ip: analysis?.ip_tracing,
-                  };
+                {social?.recommendation && (
+                  <div className="mt-3 rounded-2xl border border-[#d2e3fc] bg-[#f8fbff] p-4">
+                    <p className="text-xs font-semibold text-[#1a73e8] mb-1">
+                      Recommended action
+                    </p>
+                    <p className="text-sm leading-6 text-[#3c4043]">
+                      {social.recommendation}
+                    </p>
+                  </div>
+                )}
+              </Panel>
 
-                  const state = resultMap[tool.key];
-
-                  return (
-
-                    <div
-                      key={tool.key}
-                      className="
-                        pb-5
-                        border-b
-                        border-[#edf0f2]
-                      "
-                    >
-
-                      {/* Tool title */}
-
-                      <div
-                        className="
-                          flex
-                          items-start
-                          gap-3
-                        "
-                      >
-
-                        <span className="text-xl">
-                          {tool.icon}
-                        </span>
-
-                        <div className="min-w-0">
-
-                          <div
-                            className="
-                              text-sm
-                              font-medium
-                              text-[#202124]
-                            "
-                          >
-                            {tool.label}
-                          </div>
-
-                          <div
-                            className="
-                              mt-1
-                              text-xs
-                              leading-5
-                              text-[#5f6368]
-                            "
-                          >
-                            {tool.description}
-                          </div>
-
-                        </div>
-
-                      </div>
-
-
-                      {/* Open analysis tool button */}
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!analysis || analysis.loading) return;
-
-                          navigate(
-                            `${tool.page}?message_id=${encodeURIComponent(messageId)}`
-                          );
-                        }}
-                        disabled={!analysis || analysis.loading}
-                        aria-label={`Open ${tool.label}`}
-                        className={`
-                          mt-3 inline-flex items-center justify-center gap-2
-                          px-4 py-2 rounded-lg border text-xs font-semibold
-                          transition
-                          ${
-                            !analysis || analysis.loading
-                              ? "border-[#dadce0] bg-[#f1f3f4] text-[#9aa0a6] cursor-not-allowed"
-                              : "border-[#1e7e5a] bg-[#e6f4ee] text-[#1e7e5a] hover:bg-[#d3ece0] cursor-pointer"
-                          }
-                        `}
-                      >
-                        {analysis?.loading
-                          ? "Locked"
-                          : tool.key === "analyze"
-                          ? "Open Email Analyzer"
-                          : "Open"}
-                      </button>
-
-                      {/* Error */}
-
-                      {analysis?.error && (
-
-                        <div
-                          className="
-                            mt-3
-                            p-3
-                            rounded-lg
-                            bg-[#fce8e6]
-                            border
-                            border-[#f5c2c0]
-                            text-xs
-                            text-[#c5221f]
-                          "
-                        >
-                          {analysis.error}
-                        </div>
-
-                      )}
-
-
-                      {/* Result */}
-
+              <Panel
+                title="Network intelligence"
+                subtitle="Originating IP and infrastructure"
+                icon="🌐"
+              >
+                <div className="rounded-2xl bg-[#f8f9fa] p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs text-[#80868b]">Origin IP</p>
+                      <p className="mt-1 font-mono text-lg font-semibold break-all">
+                        {ip?.ip || email?.origin_ip || "Not found"}
+                      </p>
                     </div>
-
-                  );
-
-                })}
-
-
+                    <span className="text-2xl">📍</span>
+                  </div>
                 </div>
 
-              
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <InfoBox label="Country" value={ip?.country || "—"} />
+                  <InfoBox label="City" value={ip?.city || "—"} />
+                  <InfoBox label="Region" value={ip?.region_name || ip?.region || "—"} />
+                  <InfoBox label="Timezone" value={ip?.timezone || "—"} />
+                  <InfoBox label="ISP" value={ip?.isp || "—"} />
+                  <InfoBox label="Organization" value={ip?.organization || "—"} />
+                  <InfoBox label="ASN" value={ip?.asn || "—"} />
+                  <InfoBox label="Hosting" value={ip?.is_hosting ? "Yes" : "No"} />
+                </div>
+              </Panel>
+            </section>
 
-            </aside>
+            {/* Email evidence */}
+            <section className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <Panel title="Message metadata" subtitle="Identity and routing details" icon="✉️">
+                <div className="space-y-3">
+                  <MetaRow label="From" value={email?.from || "—"} />
+                  <MetaRow label="To" value={email?.to || "—"} />
+                  <MetaRow label="CC" value={email?.cc || "—"} />
+                  <MetaRow label="Reply-To" value={email?.reply_to || "—"} />
+                  <MetaRow label="Return-Path" value={email?.return_path || "—"} />
+                  <MetaRow label="Date" value={email?.date || "—"} />
+                </div>
+              </Panel>
 
-          </div>
+              <Panel title="URL evidence" subtitle="Links discovered in the message" icon="🔗">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs text-[#80868b]">
+                    Total discovered
+                  </span>
+                  <span className="text-lg font-semibold">
+                    {phishing?.features?.url_count ?? urls.length}
+                  </span>
+                </div>
 
-        </div>
+                {urls.length > 0 ? (
+                  <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                    {urls.slice(0, 12).map((url, index) => (
+                      <div
+                        key={index}
+                        className="rounded-xl border border-[#e5e7eb] px-3 py-2.5 bg-white"
+                      >
+                        <p className="text-xs font-mono text-[#3c4043] break-all">
+                          {typeof url === "string"
+                            ? url
+                            : url?.url || url?.href || JSON.stringify(url)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty text="No URL list was returned by the backend." />
+                )}
+              </Panel>
 
-      </div>
+              <Panel title="Attachments" subtitle="Files detected in the email" icon="📎">
+                {attachments.length > 0 ? (
+                  <div className="space-y-2">
+                    {attachments.map((att, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-3 rounded-xl bg-[#f8f9fa] px-3 py-3"
+                      >
+                        <span className="text-xl">📄</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium truncate">
+                            {att?.name ||
+                              att?.filename ||
+                              `Attachment ${index + 1}`}
+                          </p>
+                          <p className="text-[11px] text-[#80868b]">
+                            {att?.size || "Size unavailable"}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty text="No attachments detected." />
+                )}
+              </Panel>
+            </section>
 
+            {/* Bottom identity */}
+            <section className="mt-6 rounded-3xl bg-white border border-[#e5e7eb] p-5 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#80868b]">
+                    Analysis identity
+                  </p>
+                  <p className="mt-1 font-mono text-xs text-[#5f6368] break-all">
+                    {analysis?.message_id || messageId}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-[#5f6368]">
+                  <span className="w-2 h-2 rounded-full bg-[#34a853]" />
+                  Temporary analysis cache
+                </div>
+              </div>
+            </section>
+          </>
+        )}
+      </main>
     </div>
   );
 }
 
+function Panel({ title, subtitle, icon, children }) {
+  return (
+    <section className="rounded-3xl bg-white border border-[#e5e7eb] shadow-sm p-5 lg:p-6">
+      <div className="flex items-start gap-3 mb-5">
+        <div className="w-10 h-10 rounded-xl bg-[#f1f3f4] flex items-center justify-center text-lg">
+          {icon}
+        </div>
+        <div>
+          <h3 className="text-base font-semibold">{title}</h3>
+          <p className="mt-0.5 text-xs text-[#80868b]">{subtitle}</p>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
 
-// =====================================================
-// SIDEBAR ITEM
-// =====================================================
+function MetricCard({ icon, label, value, helper, tone }) {
+  const tones = {
+    danger: "bg-[#fce8e6] border-[#f5c2c0]",
+    warning: "bg-[#fef7e0] border-[#f6d98b]",
+    success: "bg-[#e6f4ea] border-[#b7dfc2]",
+    blue: "bg-[#e8f0fe] border-[#c6dafc]",
+    purple: "bg-[#f3e8fd] border-[#dec5f2]",
+  };
 
-function SidebarItem({
-  icon,
-  label,
-  count,
-  bold = false,
-}) {
+  return (
+    <div className={`rounded-2xl border p-5 ${tones[tone] || tones.blue}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xl">{icon}</span>
+        <span className="text-[10px] uppercase tracking-wider font-bold text-[#5f6368]">
+          {label}
+        </span>
+      </div>
+      <p className="mt-4 text-2xl font-bold break-all">{value}</p>
+      <p className="mt-1 text-xs text-[#5f6368]">{helper}</p>
+    </div>
+  );
+}
+
+function ScoreMini({ label, value, suffix = "%" }) {
+  return (
+    <div className="rounded-xl bg-white/65 border border-black/5 p-3">
+      <p className="text-[10px] uppercase tracking-wide opacity-65">{label}</p>
+      <p className="mt-1 text-lg font-bold">
+        {value}
+        {suffix}
+      </p>
+    </div>
+  );
+}
+
+function ModuleButton({ icon, label, onClick }) {
   return (
     <button
-      className="
-        w-full
-        h-9
-        px-4
-        flex
-        items-center
-        gap-4
-        rounded-r-full
-        border-none
-        bg-transparent
-        text-[#3c4043]
-        text-sm
-        text-left
-        cursor-pointer
-        hover:bg-[#e8eaed]
-      "
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-xl border border-[#e5e7eb] bg-white px-3 py-3 text-left hover:bg-[#f8f9fa] hover:border-[#c8d7ee] transition"
     >
-
-      <span className="w-5 text-center">
-        {icon}
-      </span>
-
-      <span
-        className={
-          bold
-            ? "flex-1 font-semibold"
-            : "flex-1"
-        }
-      >
-        {label}
-      </span>
-
-      {count && (
-        <span className="text-xs">
-          {count}
-        </span>
-      )}
-
+      <span>{icon}</span>
+      <span className="text-xs font-semibold">{label}</span>
     </button>
   );
 }
 
-
-// =====================================================
-// EXTRACT SENDER EMAIL
-// =====================================================
-
-function extractEmail(value) {
-  if (!value) return "";
-
-  const match = value.match(
-    /<([^>]+)>/
+function InfoBox({ label, value }) {
+  return (
+    <div className="rounded-xl border border-[#edf0f2] bg-[#fafbfc] p-3 min-w-0">
+      <p className="text-[10px] uppercase tracking-wide font-semibold text-[#80868b]">
+        {label}
+      </p>
+      <p className="mt-1 text-xs font-medium text-[#3c4043] break-words">
+        {formatValue(value)}
+      </p>
+    </div>
   );
-
-  return match
-    ? match[1]
-    : value;
 }
 
-
-// =====================================================
-// EXTRACT SENDER NAME
-// =====================================================
-
-function extractSenderName(value) {
-  if (!value) {
-    return "Unknown sender";
+function Finding({ label, value }) {
+  if (
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    value === 0 ||
+    value === "0"
+  ) {
+    return null;
   }
 
-  const match = value.match(
-    /^(.+?)\s*<[^>]+>$/
+  return (
+    <div className="rounded-xl border border-[#edf0f2] px-3 py-3">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 text-sm">⚠️</span>
+        <div>
+          <p className="text-xs font-semibold">{label}</p>
+          <p className="mt-1 text-xs leading-5 text-[#5f6368] break-words">
+            {formatValue(value)}
+          </p>
+        </div>
+      </div>
+    </div>
   );
-
-  if (match) {
-    return match[1]
-      .replace(/^"|"$/g, "")
-      .trim();
-  }
-
-  return value;
 }
 
+function MetaRow({ label, value }) {
+  return (
+    <div className="grid grid-cols-[90px_1fr] gap-3 text-xs">
+      <span className="font-semibold text-[#80868b]">{label}</span>
+      <span className="text-[#3c4043] break-words">{formatValue(value)}</span>
+    </div>
+  );
+}
 
-// =====================================================
-// FORMAT DATE
-// =====================================================
+function Empty({ text }) {
+  return (
+    <div className="rounded-xl bg-[#f8f9fa] p-5 text-center text-xs text-[#80868b]">
+      {text}
+    </div>
+  );
+}
 
-function formatDate(value) {
-  if (!value) return "";
+function safeJson(value) {
+  if (!value) return {};
 
-  try {
+  if (typeof value === "object") return value;
 
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return value;
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return { observation: value };
     }
-
-    return date.toLocaleString([], {
-      hour: "numeric",
-      minute: "2-digit",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-
-  } catch {
-    return value;
   }
+
+  return {};
 }
 
+function formatValue(value) {
+  if (value === undefined || value === null || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
 
-// =====================================================
-// TAILWIND CLASS CONSTANTS
-// =====================================================
+function countValue(value) {
+  if (value === undefined || value === null) return "0";
+  return String(value);
+}
 
-const headerButtonClass = `
-  w-10
-  h-10
-  flex
-  items-center
-  justify-center
-  rounded-full
-  border-none
-  bg-transparent
-  text-[#5f6368]
-  text-lg
-  cursor-pointer
-  hover:bg-[#e8eaed]
-`;
+function pretty(value) {
+  return String(value)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
 
-const messageToolbarButton = `
-  w-10
-  h-10
-  flex
-  items-center
-  justify-center
-  rounded-full
-  border-none
-  bg-transparent
-  text-[#5f6368]
-  text-lg
-  cursor-pointer
-  hover:bg-[#f1f3f4]
-`;
-
-const smallIconButton = `
-  w-9
-  h-9
-  flex
-  items-center
-  justify-center
-  rounded-full
-  border-none
-  bg-transparent
-  text-[#5f6368]
-  text-lg
-  cursor-pointer
-  hover:bg-[#f1f3f4]
-`;
-
-const securitySidebarClass = `
-  w-full
-  flex
-  items-center
-  gap-3
-  px-3
-  py-2
-  rounded-lg
-  border-none
-  bg-transparent
-  text-[#3c4043]
-  text-xs
-  text-left
-  cursor-pointer
-  hover:bg-[#e8eaed]
-`;
-
-export default EmailDetail;
+export default AnalyzerDashboard;
