@@ -25,38 +25,48 @@ function Dashboard() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch(`https://emailforensic.onrender.com/auth/status`, {
-          method: "GET",
-          credentials: "include",
-        });
-
+        const token = localStorage.getItem("access_token");
+  
+        if (!token) {
+          setCheckingAuth(false);
+          return;
+        }
+  
+        const response = await fetch(
+          "https://emailforensic.onrender.com/auth/status",
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+  
         if (!response.ok) {
           throw new Error("Failed to check authentication");
         }
-
+  
         const data = await response.json();
-        console.log("data:",data)
-        console.log(data.authenticated)
-
-        console.log("Dashboard auth:", data);
-
-        if (!data.authenticated) {
+  
+        console.log("Dashboard Auth status:", data);
+  
+        if (!data.authenticated === true) {
           navigate("/", { replace: true });
           return;
         }
-
-        setUser(data.user);
+  
+        // Token is invalid
+        
+  
       } catch (error) {
-        console.error("Authentication error:", error);
-        navigate("/", { replace: true });
+        console.error("Auth check failed:", error);
       } finally {
-        setLoading(false);
+        setCheckingAuth(false);
       }
     };
-
+  
     checkAuth();
   }, [navigate]);
-
   if (loading) {
     return (
       <div className="dashboard-loading">
