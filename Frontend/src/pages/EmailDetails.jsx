@@ -1489,23 +1489,7 @@ useEffect(() => {
                 MAILGUARD PANEL
             ================================================== */}
 
-            <aside
-              className="
-                hidden
-                xl:flex
-                w-[340px]
-                shrink-0
-                m-3
-                ml-0
-                rounded-xl
-                bg-white
-                border
-                border-[#e5e7eb]
-                shadow-sm
-                flex-col
-                overflow-hidden
-              "
-            >
+            <aside className="hidden xl:flex w-[340px] shrink-0 m-3  ml-0  rounded-xl  bg-white  border  border-[#e5e7eb]  shadow-sm  flex-col  overflow-hidden " >
 
               {/* Header */}
 
@@ -1754,7 +1738,7 @@ useEffect(() => {
 
                 </div>
 
-              </div>
+              
 
             </aside>
 
