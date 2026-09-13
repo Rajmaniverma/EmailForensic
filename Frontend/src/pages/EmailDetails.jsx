@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import "./EmailDetail.css";
+import "./EmailDetails.css";
 
 const API_URL = "https://emailforensic.onrender.com";
 
