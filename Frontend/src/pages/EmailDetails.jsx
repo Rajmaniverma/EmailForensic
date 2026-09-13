@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 const API_URL = "https://emailforensic.onrender.com";
@@ -31,6 +31,10 @@ const ANALYSIS_TOOLS = [
   },
 ];
 
+// =====================================================
+// MAIN COMPONENT
+// =====================================================
+
 function EmailDetail() {
   const { messageId } = useParams();
   const navigate = useNavigate();
@@ -39,9 +43,16 @@ function EmailDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Per-tool analysis state
   const [analysis, setAnalysis] = useState({});
 
-  const getToken = () => localStorage.getItem("access_token");
+  // =====================================================
+  // TOKEN
+  // =====================================================
+
+  const getToken = () => {
+    return localStorage.getItem("access_token");
+  };
 
   // =====================================================
   // LOAD EMAIL
@@ -81,10 +92,13 @@ function EmailDetail() {
 
         console.log("Gmail message detail:", data);
 
-        // IMPORTANT:
-        // Backend returns the email inside `email`.
-        setEmail(data.email || data.message || data);
+        // Backend returns:
+        // {
+        //   success: true,
+        //   email: {...}
+        // }
 
+        setEmail(data.email || data.message || data);
       } catch (err) {
         console.error("Email detail error:", err);
         setError("This email couldn't be loaded.");
@@ -162,7 +176,7 @@ function EmailDetail() {
 
   if (loading) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#f6f8fc] text-[#5f6368]">
+      <div className="h-screen w-full flex flex-col items-center justify-center gap-4 bg-[#f6f8fc] text-[#5f6368]">
         <div
           className="
             w-9 h-9
@@ -193,59 +207,54 @@ function EmailDetail() {
   const from =
     email?.from ||
     email?.sender ||
-    email?.sender_email ||
     "Unknown sender";
 
   const senderName =
     email?.sender_name ||
     email?.from_name ||
-    from;
+    extractSenderName(from);
 
   const senderEmail =
     email?.sender_email ||
-    email?.email ||
     extractEmail(from);
 
   const date =
     email?.date ||
-    email?.timestamp ||
     "";
 
-  const snippet =
+  // Plain-text fallback
+  const body =
+    email?.body ||
+    email?.plain_text ||
+    email?.text ||
     email?.snippet ||
     "";
 
-  const body =
-    email?.body ||
-    email?.text ||
-    snippet ||
-    "";
+  // =====================================================
+  // ORIGINAL HTML EMAIL
+  // =====================================================
 
   const htmlBody =
     email?.html_body ||
     email?.html ||
     email?.body_html ||
-    null;
+    "";
 
   const attachments = Array.isArray(email?.attachments)
     ? email.attachments
     : [];
 
-  // Detect whether body itself contains HTML
-  const bodyLooksLikeHtml =
-    typeof body === "string" &&
-    /<\/?[a-z][\s\S]*>/i.test(body);
-
-  const actualHtml =
-    htmlBody ||
-    (bodyLooksLikeHtml ? body : null);
+  // =====================================================
+  // RENDER
+  // =====================================================
 
   return (
     <div
       className="
         h-screen
         w-full
-        flex flex-col
+        flex
+        flex-col
         bg-[#f6f8fc]
         text-[#202124]
         font-sans
@@ -253,35 +262,43 @@ function EmailDetail() {
       "
     >
 
-      {/* ===================================================
+      {/* =================================================
           GMAIL TOP HEADER
-      ==================================================== */}
+      ================================================== */}
 
       <header
         className="
           h-[64px]
           min-h-[64px]
-          flex items-center
+          flex
+          items-center
           px-4
           bg-[#f6f8fc]
         "
       >
 
-        {/* Menu + Gmail logo */}
+        {/* ---------------------------------------------
+            MENU + GMAIL LOGO
+        ---------------------------------------------- */}
 
         <div
           className="
-            flex items-center
+            flex
+            items-center
             gap-3
             w-[250px]
             shrink-0
           "
         >
+
           <button
             className="
-              w-10 h-10
+              w-10
+              h-10
               rounded-full
-              flex items-center justify-center
+              flex
+              items-center
+              justify-center
               border-none
               bg-transparent
               text-[#5f6368]
@@ -297,6 +314,7 @@ function EmailDetail() {
           {/* Gmail-style logo */}
 
           <div className="flex items-center gap-2">
+
             <div
               className="
                 text-3xl
@@ -322,15 +340,20 @@ function EmailDetail() {
             >
               Gmail
             </span>
+
           </div>
+
         </div>
 
 
-        {/* Search */}
+        {/* ---------------------------------------------
+            SEARCH
+        ---------------------------------------------- */}
 
         <div
           className="
-            hidden md:flex
+            hidden
+            md:flex
             flex-1
             max-w-[820px]
             h-[48px]
@@ -362,8 +385,11 @@ function EmailDetail() {
 
           <button
             className="
-              w-9 h-9
-              flex items-center justify-center
+              w-9
+              h-9
+              flex
+              items-center
+              justify-center
               rounded-full
               border-none
               bg-transparent
@@ -379,12 +405,15 @@ function EmailDetail() {
         </div>
 
 
-        {/* Right header */}
+        {/* ---------------------------------------------
+            RIGHT HEADER
+        ---------------------------------------------- */}
 
         <div
           className="
             ml-auto
-            flex items-center
+            flex
+            items-center
             gap-1
           "
         >
@@ -412,7 +441,7 @@ function EmailDetail() {
 
           <button
             className={headerButtonClass}
-            title="Google apps"
+            title="More"
           >
             ⋮⋮
           </button>
@@ -420,11 +449,14 @@ function EmailDetail() {
           <div
             className="
               ml-2
-              w-9 h-9
+              w-9
+              h-9
               rounded-full
               bg-[#137333]
               text-white
-              flex items-center justify-center
+              flex
+              items-center
+              justify-center
               font-medium
               border-2
               border-[#aecbfa]
@@ -438,9 +470,9 @@ function EmailDetail() {
       </header>
 
 
-      {/* ===================================================
+      {/* =================================================
           MAIN GMAIL AREA
-      ==================================================== */}
+      ================================================== */}
 
       <div
         className="
@@ -456,7 +488,8 @@ function EmailDetail() {
 
         <aside
           className="
-            hidden lg:flex
+            hidden
+            lg:flex
             w-[250px]
             shrink-0
             flex-col
@@ -476,7 +509,8 @@ function EmailDetail() {
               h-[56px]
               px-5
               mb-4
-              flex items-center
+              flex
+              items-center
               gap-3
               rounded-2xl
               border-none
@@ -503,7 +537,8 @@ function EmailDetail() {
             className="
               h-9
               w-full
-              flex items-center
+              flex
+              items-center
               gap-4
               px-4
               rounded-r-full
@@ -515,7 +550,9 @@ function EmailDetail() {
               text-left
             "
           >
-            <span>📥</span>
+            <span>
+              📥
+            </span>
 
             <span className="flex-1">
               Inbox
@@ -527,9 +564,20 @@ function EmailDetail() {
           </button>
 
 
-          <SidebarItem icon="☆" label="Starred" />
-          <SidebarItem icon="◷" label="Snoozed" />
-          <SidebarItem icon="➤" label="Sent" />
+          <SidebarItem
+            icon="☆"
+            label="Starred"
+          />
+
+          <SidebarItem
+            icon="◷"
+            label="Snoozed"
+          />
+
+          <SidebarItem
+            icon="➤"
+            label="Sent"
+          />
 
           <SidebarItem
             icon="📝"
@@ -545,7 +593,10 @@ function EmailDetail() {
             bold
           />
 
-          <SidebarItem icon="⌄" label="More" />
+          <SidebarItem
+            icon="⌄"
+            label="More"
+          />
 
 
           {/* Labels */}
@@ -554,11 +605,13 @@ function EmailDetail() {
 
             <div
               className="
-                flex items-center
+                flex
+                items-center
                 justify-between
                 mb-3
               "
             >
+
               <span className="font-medium text-sm">
                 Labels
               </span>
@@ -574,6 +627,7 @@ function EmailDetail() {
               >
                 +
               </button>
+
             </div>
 
           </div>
@@ -591,7 +645,8 @@ function EmailDetail() {
 
             <div
               className="
-                flex items-center
+                flex
+                items-center
                 gap-2
                 px-2
                 pb-3
@@ -627,7 +682,9 @@ function EmailDetail() {
             <button
               onClick={() =>
                 navigate(
-                  `/ip-tracing?message_id=${messageId}`
+                  `/ip-tracing?message_id=${encodeURIComponent(
+                    messageId
+                  )}`
                 )
               }
               className={securitySidebarClass}
@@ -671,7 +728,8 @@ function EmailDetail() {
             className="
               h-[56px]
               min-h-[56px]
-              flex items-center
+              flex
+              items-center
               justify-between
               px-4
               bg-white
@@ -797,7 +855,7 @@ function EmailDetail() {
           >
 
             {/* =================================================
-                GMAIL MESSAGE
+                ORIGINAL GMAIL MESSAGE
             ================================================== */}
 
             <main
@@ -823,7 +881,7 @@ function EmailDetail() {
 
               ) : (
 
-                <article className="max-w-[1100px]">
+                <article className="w-full">
 
                   {/* =========================================
                       SUBJECT
@@ -859,8 +917,6 @@ function EmailDetail() {
                         {subject}
                       </h1>
 
-
-                      {/* Inbox label */}
 
                       <span
                         className="
@@ -918,7 +974,7 @@ function EmailDetail() {
                     </div>
 
 
-                    {/* Sender details */}
+                    {/* Sender */}
 
                     <div className="flex-1 min-w-0">
 
@@ -973,7 +1029,8 @@ function EmailDetail() {
 
                     <div
                       className="
-                        hidden sm:block
+                        hidden
+                        sm:block
                         text-xs
                         text-[#5f6368]
                         whitespace-nowrap
@@ -983,7 +1040,7 @@ function EmailDetail() {
                     </div>
 
 
-                    {/* Message actions */}
+                    {/* Actions */}
 
                     <div className="flex items-center gap-1">
 
@@ -1014,7 +1071,7 @@ function EmailDetail() {
 
 
                   {/* =========================================
-                      EMAIL CONTENT
+                      ORIGINAL HTML EMAIL
                   ========================================== */}
 
                   <div
@@ -1022,46 +1079,111 @@ function EmailDetail() {
                       px-6
                       md:px-10
                       pb-8
-                      text-sm
-                      text-[#202124]
                     "
                   >
 
-                    {actualHtml ? (
+                    {htmlBody ? (
 
-                      /*
-                       * Email HTML is isolated inside a sandboxed
-                       * iframe so that scripts contained in an
-                       * untrusted email cannot execute in your app.
-                       */
                       <div
                         className="
                           w-full
-                          min-h-[350px]
+                          bg-white
                           overflow-hidden
                         "
                       >
+
                         <iframe
-                          title="Email content"
-                          srcDoc={actualHtml}
+                          title="Original Gmail Email"
+                          srcDoc={htmlBody}
                           sandbox=""
+                          scrolling="no"
                           className="
+                            block
                             w-full
-                            min-h-[500px]
+                            min-h-[700px]
                             border-0
                             bg-white
                           "
+                          onLoad={(event) => {
+
+                            try {
+
+                              const iframe =
+                                event.currentTarget;
+
+                              const iframeDocument =
+                                iframe.contentDocument ||
+                                iframe.contentWindow?.document;
+
+                              if (
+                                !iframeDocument ||
+                                !iframeDocument.body
+                              ) {
+                                return;
+                              }
+
+                              // Give the browser a moment
+                              // to finish rendering images
+                              setTimeout(() => {
+
+                                try {
+
+                                  const bodyHeight =
+                                    iframeDocument.body
+                                      .scrollHeight;
+
+                                  const documentHeight =
+                                    iframeDocument.documentElement
+                                      ?.scrollHeight || 0;
+
+                                  const height = Math.max(
+                                    bodyHeight,
+                                    documentHeight,
+                                    700
+                                  );
+
+                                  iframe.style.height =
+                                    `${height + 30}px`;
+
+                                } catch (error) {
+
+                                  console.error(
+                                    "Iframe resize error:",
+                                    error
+                                  );
+
+                                }
+
+                              }, 300);
+
+                            } catch (error) {
+
+                              console.error(
+                                "Unable to access email iframe:",
+                                error
+                              );
+
+                            }
+
+                          }}
                         />
+
                       </div>
 
                     ) : body ? (
 
+                      /* ---------------------------------------
+                         PLAIN TEXT FALLBACK
+                      ---------------------------------------- */
+
                       <div
                         className="
+                          max-w-[900px]
                           whitespace-pre-wrap
                           break-words
+                          text-sm
                           leading-7
-                          max-w-[900px]
+                          text-[#202124]
                         "
                       >
                         {body}
@@ -1123,62 +1245,66 @@ function EmailDetail() {
                         "
                       >
 
-                        {attachments.map((att, index) => (
+                        {attachments.map(
+                          (att, index) => (
 
-                          <div
-                            key={index}
-                            className="
-                              min-w-[190px]
-                              max-w-[280px]
-                              flex
-                              items-center
-                              gap-3
-                              px-3
-                              py-3
-                              border
-                              border-[#dadce0]
-                              rounded-lg
-                              bg-white
-                              hover:bg-[#f8f9fa]
-                              cursor-pointer
-                            "
-                          >
+                            <div
+                              key={index}
+                              className="
+                                min-w-[190px]
+                                max-w-[280px]
+                                flex
+                                items-center
+                                gap-3
+                                px-3
+                                py-3
+                                border
+                                border-[#dadce0]
+                                rounded-lg
+                                bg-white
+                                hover:bg-[#f8f9fa]
+                                cursor-pointer
+                              "
+                            >
 
-                            <span className="text-xl">
-                              📎
-                            </span>
+                              <span className="text-xl">
+                                📎
+                              </span>
 
-                            <div className="min-w-0">
+                              <div className="min-w-0">
 
-                              <div
-                                className="
-                                  text-sm
-                                  font-medium
-                                  truncate
-                                "
-                              >
-                                {att.name ||
-                                  att.filename ||
-                                  `Attachment ${index + 1}`}
-                              </div>
-
-                              {att.size && (
                                 <div
                                   className="
-                                    text-xs
-                                    text-[#5f6368]
-                                    mt-1
+                                    text-sm
+                                    font-medium
+                                    truncate
                                   "
                                 >
-                                  {att.size}
+                                  {att.name ||
+                                    att.filename ||
+                                    `Attachment ${index + 1}`}
                                 </div>
-                              )}
+
+                                {att.size && (
+
+                                  <div
+                                    className="
+                                      text-xs
+                                      text-[#5f6368]
+                                      mt-1
+                                    "
+                                  >
+                                    {att.size}
+                                  </div>
+
+                                )}
+
+                              </div>
 
                             </div>
 
-                          </div>
-
-                        ))}
+                          )
+                        )}
 
                       </div>
 
@@ -1248,7 +1374,9 @@ function EmailDetail() {
                   </div>
 
 
-                  {/* Message ID */}
+                  {/* =========================================
+                      MESSAGE ID
+                  ========================================== */}
 
                   <div
                     className="
@@ -1278,7 +1406,8 @@ function EmailDetail() {
 
             <aside
               className="
-                hidden xl:flex
+                hidden
+                xl:flex
                 w-[340px]
                 shrink-0
                 m-3
@@ -1350,9 +1479,11 @@ function EmailDetail() {
 
                 {ANALYSIS_TOOLS.map((tool) => {
 
-                  const state = analysis[tool.key];
+                  const state =
+                    analysis[tool.key];
 
                   return (
+
                     <div
                       key={tool.key}
                       className="
@@ -1407,7 +1538,9 @@ function EmailDetail() {
                       {/* Run button */}
 
                       <button
-                        onClick={() => runAnalysis(tool)}
+                        onClick={() =>
+                          runAnalysis(tool)
+                        }
                         disabled={state?.loading}
                         className="
                           mt-3
@@ -1437,6 +1570,7 @@ function EmailDetail() {
                       {/* Error */}
 
                       {state?.error && (
+
                         <div
                           className="
                             mt-3
@@ -1451,6 +1585,7 @@ function EmailDetail() {
                         >
                           {state.error}
                         </div>
+
                       )}
 
 
@@ -1458,6 +1593,7 @@ function EmailDetail() {
 
                       {state?.result &&
                         !state.loading && (
+
                           <pre
                             className="
                               mt-3
@@ -1482,14 +1618,19 @@ function EmailDetail() {
                               2
                             )}
                           </pre>
+
                         )}
 
                     </div>
+
                   );
+
                 })}
 
 
-                {/* IP Tracing */}
+                {/* =========================================
+                    IP TRACING
+                ========================================== */}
 
                 <div>
 
@@ -1537,7 +1678,9 @@ function EmailDetail() {
                   <button
                     onClick={() =>
                       navigate(
-                        `/ip-tracing?message_id=${messageId}`
+                        `/ip-tracing?message_id=${encodeURIComponent(
+                          messageId
+                        )}`
                       )
                     }
                     className="
@@ -1576,7 +1719,7 @@ function EmailDetail() {
 
 
 // =====================================================
-// SMALL COMPONENTS / HELPERS
+// SIDEBAR ITEM
 // =====================================================
 
 function SidebarItem({
@@ -1604,6 +1747,7 @@ function SidebarItem({
         hover:bg-[#e8eaed]
       "
     >
+
       <span className="w-5 text-center">
         {icon}
       </span>
@@ -1623,24 +1767,61 @@ function SidebarItem({
           {count}
         </span>
       )}
+
     </button>
   );
 }
 
 
+// =====================================================
+// EXTRACT SENDER EMAIL
+// =====================================================
+
 function extractEmail(value) {
   if (!value) return "";
 
-  const match = value.match(/<([^>]+)>/);
+  const match = value.match(
+    /<([^>]+)>/
+  );
 
-  return match ? match[1] : value;
+  return match
+    ? match[1]
+    : value;
 }
 
+
+// =====================================================
+// EXTRACT SENDER NAME
+// =====================================================
+
+function extractSenderName(value) {
+  if (!value) {
+    return "Unknown sender";
+  }
+
+  const match = value.match(
+    /^(.+?)\s*<[^>]+>$/
+  );
+
+  if (match) {
+    return match[1]
+      .replace(/^"|"$/g, "")
+      .trim();
+  }
+
+  return value;
+}
+
+
+// =====================================================
+// FORMAT DATE
+// =====================================================
 
 function formatDate(value) {
   if (!value) return "";
 
   try {
+
     const date = new Date(value);
 
     if (Number.isNaN(date.getTime())) {
@@ -1654,6 +1835,7 @@ function formatDate(value) {
       day: "numeric",
       year: "numeric",
     });
+
   } catch {
     return value;
   }
@@ -1665,8 +1847,11 @@ function formatDate(value) {
 // =====================================================
 
 const headerButtonClass = `
-  w-10 h-10
-  flex items-center justify-center
+  w-10
+  h-10
+  flex
+  items-center
+  justify-center
   rounded-full
   border-none
   bg-transparent
@@ -1677,8 +1862,11 @@ const headerButtonClass = `
 `;
 
 const messageToolbarButton = `
-  w-10 h-10
-  flex items-center justify-center
+  w-10
+  h-10
+  flex
+  items-center
+  justify-center
   rounded-full
   border-none
   bg-transparent
@@ -1689,8 +1877,11 @@ const messageToolbarButton = `
 `;
 
 const smallIconButton = `
-  w-9 h-9
-  flex items-center justify-center
+  w-9
+  h-9
+  flex
+  items-center
+  justify-center
   rounded-full
   border-none
   bg-transparent

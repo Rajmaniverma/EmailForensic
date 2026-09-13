@@ -219,6 +219,8 @@ def convert_gmail_to_email_data(gmail_parsed: dict, gmail_msg: dict) -> dict:
         "date": gmail_parsed.get("date"),
         "reply_to": reply_to,
         "return_path": return_path,
+        "html_body": html_body,
+        "thread_id": gmail_parsed.get("thread_id"),
         "message_id": header_msg_id,
         "received": received,
         "origin_ip": origin_ip,
