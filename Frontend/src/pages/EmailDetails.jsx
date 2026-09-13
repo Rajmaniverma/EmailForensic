@@ -44,6 +44,7 @@ const ANALYSIS_TOOLS = [
 function EmailDetail() {
   const { messageId } = useParams();
   const navigate = useNavigate();
+  const [analysisProgress, setAnalysisProgress] = useState(0);
 const [analysis, setAnalysis] = useState(null);
   const [email, setEmail] = useState(null);
   const [loading, setLoading] = useState(true);
