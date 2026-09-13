@@ -834,7 +834,8 @@ useEffect(() => {
             min-w-0
             flex
             flex-col
-            overflow-hidden
+            overflow-hidden 
+
           "
         >
 
@@ -844,7 +845,7 @@ useEffect(() => {
 
           <div
             className="
-              h-[56px]
+              h-14
               min-h-[56px]
               flex
               items-center
@@ -1611,6 +1612,36 @@ useEffect(() => {
                     : "Analyze Email"}
                 </button>
 
+                {/* Analyzer Dashboard button - directly below Analyze Email */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!analysis || analysis.loading) return;
+
+                    navigate(
+                      `/analyzer?message_id=${encodeURIComponent(messageId)}`
+                    );
+                  }}
+                  disabled={!analysis || analysis.loading}
+                  className={`
+                    w-full
+                    px-4
+                    py-2.5
+                    rounded-xl
+                    border
+                    text-sm
+                    font-medium
+                    transition
+                    ${
+                      !analysis || analysis.loading
+                        ? "border-[#dadce0] bg-[#f1f3f4] text-[#9aa0a6] cursor-not-allowed"
+                        : "border-[#1a73e8] bg-white text-[#1a73e8] hover:bg-[#e8f0fe] cursor-pointer"
+                    }
+                  `}
+                >
+                  📊 Analyzer Dashboard
+                </button>
+
                 {analysis?.loading && (
                   <div className="mt-3 rounded-xl border border-[#d2e3fc] bg-[#f8fbff] p-3">
                     <div className="flex items-center justify-between mb-2">
@@ -1702,30 +1733,36 @@ useEffect(() => {
                       </div>
 
 
-                      {/* Run button */}
+                      {/* Open analysis tool button */}
 
-                     {tool.key !== "analyze" && (
-                        <button
-                          onClick={() => {
-                            if (!analysis || analysis.loading) return;
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!analysis || analysis.loading) return;
 
-                            navigate(
-                              `${tool.page}?message_id=${encodeURIComponent(messageId)}`
-                            );
-                          }}
-                          disabled={!analysis || analysis.loading}
-                          className={`
-                            mt-3 px-4 py-2 rounded-lg border text-xs font-medium transition
-                            ${
-                              !analysis || analysis.loading
-                                ? "border-[#dadce0] bg-[#f1f3f4] text-[#9aa0a6] cursor-not-allowed"
-                                : "border-[#1e7e5a] bg-[#e6f4ee] text-[#1e7e5a] hover:bg-[#d3ece0] cursor-pointer"
-                            }
-                          `}
-                        >
-                          {analysis?.loading ? "Locked" : "Open"}
-                        </button>
-                      )}
+                          navigate(
+                            `${tool.page}?message_id=${encodeURIComponent(messageId)}`
+                          );
+                        }}
+                        disabled={!analysis || analysis.loading}
+                        aria-label={`Open ${tool.label}`}
+                        className={`
+                          mt-3 inline-flex items-center justify-center gap-2
+                          px-4 py-2 rounded-lg border text-xs font-semibold
+                          transition
+                          ${
+                            !analysis || analysis.loading
+                              ? "border-[#dadce0] bg-[#f1f3f4] text-[#9aa0a6] cursor-not-allowed"
+                              : "border-[#1e7e5a] bg-[#e6f4ee] text-[#1e7e5a] hover:bg-[#d3ece0] cursor-pointer"
+                          }
+                        `}
+                      >
+                        {analysis?.loading
+                          ? "Locked"
+                          : tool.key === "analyze"
+                          ? "Open Email Analyzer"
+                          : "Open"}
+                      </button>
 
                       {/* Error */}
 
