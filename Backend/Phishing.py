@@ -1,7 +1,7 @@
 import joblib
 import os
 import pandas as pd
-
+import json
 from groq import Groq
 from dotenv import load_dotenv
 from Mlanalysis.extract_feature import extract_features
@@ -228,8 +228,10 @@ Do not invent information that is not present in the email.
             }
         )
 
-
+ 
         ai_analysis = response.choices[0].message.content
+        ai_analysis_data = json.loads(ai_analysis)
+        Explanation = ai_analysis_data.get("explanation")
 
 
         print("\n===== AI ANALYSIS =====")
@@ -246,5 +248,5 @@ Do not invent information that is not present in the email.
         "phishing_score": round(phishing_score, 2),
         "legitimate_score": round(legitimate_score, 2),
         "explanation": Explanation ,
-        "ai_analysis": ai_analysis
+        "ai_analysis": ai_analysis_data
     }
