@@ -267,10 +267,91 @@ function Dashboard() {
 
   if (loading) {
     return (
-      <div className="dashboard-loading">
-        <div className="loading-spinner"></div>
-        <p>Loading Gmail…</p>
+<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95">
+  <div className="flex flex-col items-center">
+
+    {/* Animated MailGuard Logo */}
+    <div className="relative mb-7">
+      {/* Outer pulse */}
+      <div className="absolute inset-0 rounded-2xl bg-blue-500/20 animate-ping"></div>
+
+      {/* Logo box */}
+      <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-2xl shadow-blue-500/30">
+        <svg
+          className="h-10 w-10 text-white"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M3 7.5A2.5 2.5 0 015.5 5h13A2.5 2.5 0 0121 7.5v9a2.5 2.5 0 01-2.5 2.5h-13A2.5 2.5 0 013 16.5v-9z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M3.5 7l8.5 6 8.5-6"
+          />
+        </svg>
+
+        {/* Security check */}
+        <div className="absolute -right-2 -bottom-2 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 shadow-lg ring-4 ring-slate-950">
+          <svg
+            className="h-4 w-4 text-white"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M5 12l4 4L19 6"
+            />
+          </svg>
+        </div>
       </div>
+    </div>
+
+    {/* Title */}
+    <h2 className="text-xl font-semibold tracking-tight text-white">
+      Connecting to Gmail
+    </h2>
+
+    <p className="mt-2 text-sm text-slate-400">
+      Securely loading your inbox
+    </p>
+
+    {/* Progress animation */}
+    <div className="mt-7 h-1.5 w-64 overflow-hidden rounded-full bg-slate-800">
+      <div className="h-full w-1/2 rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-400 animate-[loading_1.4s_ease-in-out_infinite]"></div>
+    </div>
+
+    {/* Status */}
+    <div className="mt-5 flex items-center gap-2 text-xs text-slate-500">
+      <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400"></span>
+      MailGuard is preparing your inbox
+    </div>
+
+  </div>
+
+  {/* Animation */}
+  <style>{`
+    @keyframes loading {
+      0% {
+        transform: translateX(-100%);
+      }
+      50% {
+        transform: translateX(100%);
+      }
+      100% {
+        transform: translateX(200%);
+      }
+    }
+  `}</style>
+</div>
     );
   }
 

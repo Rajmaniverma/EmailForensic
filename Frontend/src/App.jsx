@@ -11,15 +11,8 @@ function App() {
       <Route path="/" element={<Login />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/email/:messageId" element={<EmailDetail />} />
-            <Route
-        path="/privacy-policy"
-        element={<PrivacyPolicy/>}
-      />
-
-      <Route
-        path="/terms"
-        element={<Terms />}
-      />
+      <Route path="/privacy-policy" element={<PrivacyPolicy/>}/>
+      <Route path="/terms" element={<Terms />}/>
 
       {/* <Route path="/phishing" element={<Phishing />} />
       <Route path="/social" element={<Social />} />

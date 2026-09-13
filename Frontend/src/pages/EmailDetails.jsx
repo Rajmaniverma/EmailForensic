@@ -176,22 +176,53 @@ function EmailDetail() {
 
   if (loading) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center gap-4 bg-[#f6f8fc] text-[#5f6368]">
-        <div
-          className="
-            w-9 h-9
-            rounded-full
-            border-[3px]
-            border-[#dadce0]
-            border-t-[#1a73e8]
-            animate-spin
-          "
+<div className="h-screen w-full flex flex-col items-center justify-center bg-[#f6f8fc] text-[#5f6368]">
+
+  {/* Animated Email Icon */}
+  <div className="relative mb-5">
+
+    {/* Soft pulse */}
+    <div className="absolute inset-0 rounded-full bg-[#1a73e8]/10 animate-ping" />
+
+    {/* Envelope */}
+    <div className="relative w-14 h-14 rounded-2xl bg-white shadow-md flex items-center justify-center">
+      <svg
+        className="w-7 h-7 text-[#1a73e8]"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
+        <rect
+          x="3"
+          y="5"
+          width="18"
+          height="14"
+          rx="2"
         />
 
-        <p className="text-sm">
-          Opening email…
-        </p>
-      </div>
+        <path
+          d="M3.5 7L12 13L20.5 7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  </div>
+
+  {/* Text */}
+  <p className="text-sm font-medium text-[#3c4043]">
+    Opening email
+  </p>
+
+  {/* Animated dots */}
+  <div className="flex gap-1 mt-2">
+    <span className="w-1.5 h-1.5 rounded-full bg-[#1a73e8] animate-bounce [animation-delay:-0.3s]" />
+    <span className="w-1.5 h-1.5 rounded-full bg-[#1a73e8] animate-bounce [animation-delay:-0.15s]" />
+    <span className="w-1.5 h-1.5 rounded-full bg-[#1a73e8] animate-bounce" />
+  </div>
+
+</div>
     );
   }
 
