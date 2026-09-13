@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import "./Dashboard.css";
+
 
 const API_URL = "https://emailforensic.onrender.com";
 
@@ -295,282 +295,670 @@ function Dashboard() {
   // =========================================
 
   return (
-    <div className="gmail-dashboard">
-      {/* =====================================
-          TOP HEADER
-      ===================================== */}
+  <div className="min-h-screen h-screen flex flex-col bg-[#f6f8fc] text-[#1f1f1f] font-sans overflow-hidden">
 
-      <header className="gmail-header">
-        <div className="gmail-logo-area">
-          <button className="icon-button menu-button" aria-label="Main menu">
-            <span className="hamburger" />
-          </button>
+    {/* =====================================================
+        TOP HEADER
+    ====================================================== */}
+    <header className="h-16 min-h-16 flex items-center justify-between px-4 md:px-5 bg-white border-b border-[#e6e8ec]">
 
-          <div className="gmail-logo">
-            <span className="gmail-m" aria-hidden="true">
-              🛡
-            </span>
-            <span className="gmail-logo-text">MailGuard</span>
-          </div>
-        </div>
+      {/* Logo */}
+      <div className="flex items-center gap-2 md:gap-3 min-w-[190px]">
+        <button
+          className="w-10 h-10 flex items-center justify-center rounded-full
+                     bg-transparent border-none cursor-pointer
+                     text-[#5f6368] text-xl
+                     hover:bg-[#f1f3f4] transition-colors"
+          aria-label="Main menu"
+        >
+          ☰
+        </button>
 
-        {/* Search */}
-
-        <div className="gmail-search">
-          <span className="search-icon" aria-hidden="true">
-            🔍
+        <div className="flex items-center gap-2">
+          <span className="text-2xl" aria-hidden="true">
+            🛡️
           </span>
 
-          <input
-            type="text"
-            placeholder="Search mail"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-
-          <span className="search-filter" aria-hidden="true">
-            ☷
+          <span className="text-xl md:text-2xl font-medium text-[#1f1f1f]">
+            MailGuard
           </span>
         </div>
-
-        {/* Header actions */}
-
-        <div className="gmail-header-actions">
-          <button className="icon-button" title="Help">
-            ?
-          </button>
-
-          <button className="icon-button" title="Settings">
-            ⚙
-          </button>
-
-          <button className="icon-button" title="Google apps">
-            ⋮⋮
-          </button>
-
-          <div className="profile-circle" title={user.name}>
-            {user.photo ? (
-              <img src={user.photo} alt={user.name} />
-            ) : (
-              user.name?.charAt(0).toUpperCase()
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* =====================================
-          BODY
-      ===================================== */}
-
-      <div className="gmail-body">
-        {/* =================================
-            SIDEBAR
-        ================================= */}
-
-        <aside className="gmail-sidebar">
-          <button
-            className="compose-button"
-            onClick={() => navigate("/analyzer")}
-          >
-            <span className="compose-icon">✎</span>
-            Compose
-          </button>
-
-          <nav className="gmail-nav">
-            <button className="gmail-nav-item active">
-              <span className="nav-icon">📥</span>
-              <strong>Inbox</strong>
-              <b>{messages.length}</b>
-            </button>
-
-            <button className="gmail-nav-item">
-              <span className="nav-icon">☆</span>
-              Starred
-            </button>
-
-            <button className="gmail-nav-item">
-              <span className="nav-icon">◷</span>
-              Snoozed
-            </button>
-
-            <button className="gmail-nav-item">
-              <span className="nav-icon">➤</span>
-              Sent
-            </button>
-
-            <button className="gmail-nav-item">
-              <span className="nav-icon">📝</span>
-              Drafts
-              <b>0</b>
-            </button>
-
-            <button className="gmail-nav-item">
-              <span className="nav-icon">🛍</span>
-              Purchases
-              <b>0</b>
-            </button>
-
-            <button className="gmail-nav-item">
-              <span className="nav-icon">⌄</span>
-              More
-            </button>
-          </nav>
-
-          <div className="labels-section">
-            <div className="labels-header">
-              <strong>Labels</strong>
-              <button aria-label="Add label">＋</button>
-            </div>
-          </div>
-
-          {/* MailGuard tools */}
-
-          <div className="mailguard-section">
-            <div className="mailguard-title">
-              <span aria-hidden="true">🛡</span> MailGuard Security
-            </div>
-
-            <button onClick={() => navigate("/phishing")}>
-              <span className="nav-icon">🎣</span> Phishing Detection
-            </button>
-
-            <button onClick={() => navigate("/social")}>
-              <span className="nav-icon">👥</span> Social Analysis
-            </button>
-
-            <button onClick={() => navigate("/ip-tracing")}>
-              <span className="nav-icon">🌐</span> IP Tracing
-            </button>
-
-            <button onClick={() => navigate("/analyzer")}>
-              <span className="nav-icon">🔍</span> Email Analyzer
-            </button>
-          </div>
-        </aside>
-
-        {/* =================================
-            MAIN EMAIL AREA
-        ================================= */}
-
-        <main className="gmail-main">
-          {/* Toolbar */}
-
-          <div className="gmail-toolbar">
-            <div className="toolbar-left">
-              <button className="icon-button" title="Select">
-                □
-              </button>
-
-              <button
-                className={`icon-button refresh-button ${
-                  refreshing ? "spinning" : ""
-                }`}
-                title="Refresh"
-                onClick={handleRefresh}
-                disabled={refreshing}
-              >
-                ↻
-              </button>
-
-              <button className="icon-button" title="More">
-                ⋮
-              </button>
-            </div>
-
-            <div className="toolbar-right">
-              <span className="range-label">
-                {rangeStart}–{rangeEnd} of {messages.length}
-              </span>
-
-              <button
-                className="icon-button"
-                title="Previous page"
-                onClick={handlePrevious}
-                disabled={pageIndex === 0 || pageLoading}
-              >
-                ‹
-              </button>
-
-              <button
-                className="icon-button"
-                title="Next page"
-                onClick={handleNext}
-                disabled={!hasNext || pageLoading}
-              >
-                ›
-              </button>
-            </div>
-          </div>
-
-          {/* =================================
-              EMAIL LIST
-          ================================= */}
-
-          <div className="email-list">
-            {pageLoading ? (
-              <div className="page-loading">
-                <div className="loading-spinner small"></div>
-              </div>
-            ) : filteredMessages.length === 0 ? (
-              <div className="empty-inbox">
-                <div className="empty-inbox-icon">📭</div>
-                <h3>No emails found</h3>
-                <p>Your Gmail inbox doesn't contain matching messages.</p>
-              </div>
-            ) : (
-              filteredMessages.map((message) => (
-                <div
-                  className="email-row"
-                  key={message.message_id}
-                  onClick={() => openEmail(message.message_id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") openEmail(message.message_id);
-                  }}
-                >
-                  {/* Checkbox */}
-                  <div
-                    className="email-checkbox"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    □
-                  </div>
-
-                  {/* Star */}
-                  <div
-                    className="email-star"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    ☆
-                  </div>
-
-                  {/* Sender */}
-                  <div className="email-sender">Gmail</div>
-
-                  {/* Subject */}
-                  <div className="email-content">
-                    <strong>{message.name}</strong>
-                    <span className="email-preview">
-                      — Click to open and analyze this email
-                    </span>
-                  </div>
-
-                  {/* Message ID */}
-                  <div className="email-id">{message.message_id}</div>
-
-                  {/* Open indicator */}
-                  <div className="email-open-arrow" aria-hidden="true">
-                    ›
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </main>
       </div>
-    </div>
-  );
-}
 
+      {/* Search */}
+      <div
+        className="hidden sm:flex flex-1 max-w-[720px] mx-4 md:mx-8
+                   h-11 items-center gap-3 px-4
+                   bg-[#eaf0f8] rounded-full"
+      >
+        <span className="text-[#5f6368] text-base" aria-hidden="true">
+          🔍
+        </span>
+
+        <input
+          type="text"
+          placeholder="Search mail"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 bg-transparent border-none outline-none
+                     text-sm text-[#202124]
+                     placeholder:text-[#5f6368]"
+        />
+
+        <span
+          className="text-[#5f6368] cursor-pointer"
+          aria-hidden="true"
+        >
+          ☷
+        </span>
+      </div>
+
+      {/* Header actions */}
+      <div className="flex items-center gap-1">
+        <button
+          className="w-10 h-10 flex items-center justify-center
+                     rounded-full border-none bg-transparent
+                     text-[#5f6368] text-lg cursor-pointer
+                     hover:bg-[#f1f3f4] transition-colors"
+          title="Help"
+        >
+          ?
+        </button>
+
+        <button
+          className="w-10 h-10 hidden md:flex items-center justify-center
+                     rounded-full border-none bg-transparent
+                     text-[#5f6368] text-lg cursor-pointer
+                     hover:bg-[#f1f3f4] transition-colors"
+          title="Settings"
+        >
+          ⚙
+        </button>
+
+        <button
+          className="w-10 h-10 hidden md:flex items-center justify-center
+                     rounded-full border-none bg-transparent
+                     text-[#5f6368] text-lg cursor-pointer
+                     hover:bg-[#f1f3f4] transition-colors"
+          title="Google apps"
+        >
+          ⋮⋮
+        </button>
+
+        {/* Profile */}
+        <div
+          className="w-9 h-9 ml-1 rounded-full overflow-hidden
+                     flex items-center justify-center
+                     bg-[#1a73e8] text-white
+                     text-sm font-semibold cursor-pointer"
+          title={user.name}
+        >
+          {user.photo ? (
+            <img
+              src={user.photo}
+              alt={user.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            user.name?.charAt(0).toUpperCase()
+          )}
+        </div>
+      </div>
+    </header>
+
+
+    {/* =====================================================
+        BODY
+    ====================================================== */}
+    <div className="flex flex-1 min-h-0 overflow-hidden">
+
+      {/* ===================================================
+          SIDEBAR
+      ==================================================== */}
+      <aside
+        className="hidden md:flex w-[250px] shrink-0
+                   flex-col bg-[#f6f8fc]
+                   px-3 py-4 overflow-y-auto"
+      >
+
+        {/* Compose */}
+        <button
+          onClick={() => navigate("/analyzer")}
+          className="self-start flex items-center gap-3
+                     px-5 py-3 mb-5
+                     bg-[#c2e7ff] text-[#001d35]
+                     rounded-2xl border-none
+                     text-sm font-medium
+                     cursor-pointer
+                     shadow-sm
+                     hover:shadow-md hover:bg-[#b8e2fc]
+                     transition-all"
+        >
+          <span className="text-xl">✎</span>
+          Compose
+        </button>
+
+
+        {/* Gmail Navigation */}
+        <nav className="flex flex-col gap-1">
+
+          {/* Inbox */}
+          <button
+            className="w-full h-9 px-4
+                       flex items-center gap-4
+                       rounded-r-full border-none
+                       bg-[#d3e3fd] text-[#001d35]
+                       cursor-pointer text-left"
+          >
+            <span className="text-base">📥</span>
+
+            <strong className="flex-1 text-sm">
+              Inbox
+            </strong>
+
+            <b className="text-xs">
+              {messages.length}
+            </b>
+          </button>
+
+
+          {/* Starred */}
+          <button
+            className="w-full h-9 px-4
+                       flex items-center gap-4
+                       rounded-r-full border-none
+                       bg-transparent
+                       text-[#3c4043]
+                       cursor-pointer text-left
+                       hover:bg-[#e8eaed]"
+          >
+            <span className="text-lg">☆</span>
+            <span className="text-sm">Starred</span>
+          </button>
+
+
+          {/* Snoozed */}
+          <button
+            className="w-full h-9 px-4
+                       flex items-center gap-4
+                       rounded-r-full border-none
+                       bg-transparent
+                       text-[#3c4043]
+                       cursor-pointer text-left
+                       hover:bg-[#e8eaed]"
+          >
+            <span className="text-lg">◷</span>
+            <span className="text-sm">Snoozed</span>
+          </button>
+
+
+          {/* Sent */}
+          <button
+            className="w-full h-9 px-4
+                       flex items-center gap-4
+                       rounded-r-full border-none
+                       bg-transparent
+                       text-[#3c4043]
+                       cursor-pointer text-left
+                       hover:bg-[#e8eaed]"
+          >
+            <span className="text-base">➤</span>
+            <span className="text-sm">Sent</span>
+          </button>
+
+
+          {/* Drafts */}
+          <button
+            className="w-full h-9 px-4
+                       flex items-center gap-4
+                       rounded-r-full border-none
+                       bg-transparent
+                       text-[#3c4043]
+                       cursor-pointer text-left
+                       hover:bg-[#e8eaed]"
+          >
+            <span className="text-base">📝</span>
+
+            <span className="flex-1 text-sm">
+              Drafts
+            </span>
+
+            <b className="text-xs">0</b>
+          </button>
+
+
+          {/* Purchases */}
+          <button
+            className="w-full h-9 px-4
+                       flex items-center gap-4
+                       rounded-r-full border-none
+                       bg-transparent
+                       text-[#3c4043]
+                       cursor-pointer text-left
+                       hover:bg-[#e8eaed]"
+          >
+            <span className="text-base">🛍</span>
+
+            <span className="flex-1 text-sm">
+              Purchases
+            </span>
+
+            <b className="text-xs">0</b>
+          </button>
+
+
+          {/* More */}
+          <button
+            className="w-full h-9 px-4
+                       flex items-center gap-4
+                       rounded-r-full border-none
+                       bg-transparent
+                       text-[#3c4043]
+                       cursor-pointer text-left
+                       hover:bg-[#e8eaed]"
+          >
+            <span className="text-base">⌄</span>
+            <span className="text-sm">More</span>
+          </button>
+
+        </nav>
+
+
+        {/* Labels */}
+        <div className="mt-6 px-4">
+          <div className="flex items-center justify-between">
+            <strong className="text-sm text-[#3c4043]">
+              Labels
+            </strong>
+
+            <button
+              aria-label="Add label"
+              className="border-none bg-transparent
+                         text-xl text-[#5f6368]
+                         cursor-pointer"
+            >
+              ＋
+            </button>
+          </div>
+        </div>
+
+
+        {/* =================================================
+            MAILGUARD SECURITY
+        ================================================== */}
+        <div className="mt-7 px-2">
+
+          <div
+            className="flex items-center gap-2
+                       px-3 pb-3 mb-2
+                       border-b border-[#e6e8ec]
+                       text-sm font-semibold
+                       text-[#1e7e5a]"
+          >
+            <span>🛡️</span>
+            MailGuard Security
+          </div>
+
+
+          {/* Phishing */}
+          <button
+            onClick={() => navigate("/phishing")}
+            className="w-full flex items-center gap-3
+                       px-3 py-2.5 rounded-lg
+                       border-none bg-transparent
+                       text-[#3c4043]
+                       text-sm text-left
+                       cursor-pointer
+                       hover:bg-[#e8eaed]"
+          >
+            <span>🎣</span>
+            Phishing Detection
+          </button>
+
+
+          {/* Social */}
+          <button
+            onClick={() => navigate("/social")}
+            className="w-full flex items-center gap-3
+                       px-3 py-2.5 rounded-lg
+                       border-none bg-transparent
+                       text-[#3c4043]
+                       text-sm text-left
+                       cursor-pointer
+                       hover:bg-[#e8eaed]"
+          >
+            <span>👥</span>
+            Social Analysis
+          </button>
+
+
+          {/* IP */}
+          <button
+            onClick={() => navigate("/ip-tracing")}
+            className="w-full flex items-center gap-3
+                       px-3 py-2.5 rounded-lg
+                       border-none bg-transparent
+                       text-[#3c4043]
+                       text-sm text-left
+                       cursor-pointer
+                       hover:bg-[#e8eaed]"
+          >
+            <span>🌐</span>
+            IP Tracing
+          </button>
+
+
+          {/* Analyzer */}
+          <button
+            onClick={() => navigate("/analyzer")}
+            className="w-full flex items-center gap-3
+                       px-3 py-2.5 rounded-lg
+                       border-none bg-transparent
+                       text-[#3c4043]
+                       text-sm text-left
+                       cursor-pointer
+                       hover:bg-[#e8eaed]"
+          >
+            <span>🔍</span>
+            Email Analyzer
+          </button>
+
+        </div>
+
+      </aside>
+
+
+      {/* ===================================================
+          MAIN EMAIL AREA
+      ==================================================== */}
+      <main
+        className="flex-1 min-w-0
+                   flex flex-col
+                   bg-white
+                   md:m-2 md:rounded-xl
+                   overflow-hidden
+                   shadow-[0_1px_2px_rgba(60,64,67,0.08),0_1px_3px_rgba(60,64,67,0.08)]"
+      >
+
+        {/* =================================================
+            TOOLBAR
+        ================================================== */}
+        <div
+          className="h-[56px] min-h-[56px]
+                     flex items-center justify-between
+                     px-3 md:px-4
+                     border-b border-[#e6e8ec]
+                     bg-white"
+        >
+
+          {/* Left toolbar */}
+          <div className="flex items-center gap-1">
+
+            {/* Select */}
+            <button
+              className="w-9 h-9 flex items-center justify-center
+                         rounded-full border-none
+                         bg-transparent
+                         text-[#5f6368] text-lg
+                         cursor-pointer
+                         hover:bg-[#f1f3f4]"
+              title="Select"
+            >
+              □
+            </button>
+
+
+            {/* Refresh */}
+            <button
+              className={`w-9 h-9 flex items-center justify-center
+                         rounded-full border-none
+                         bg-transparent
+                         text-[#5f6368] text-xl
+                         cursor-pointer
+                         hover:bg-[#f1f3f4]
+                         disabled:opacity-50
+                         disabled:cursor-default
+                         ${refreshing ? "animate-spin" : ""}`}
+              title="Refresh"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              ↻
+            </button>
+
+
+            {/* More */}
+            <button
+              className="w-9 h-9 flex items-center justify-center
+                         rounded-full border-none
+                         bg-transparent
+                         text-[#5f6368] text-xl
+                         cursor-pointer
+                         hover:bg-[#f1f3f4]"
+              title="More"
+            >
+              ⋮
+            </button>
+
+          </div>
+
+
+          {/* Right toolbar */}
+          <div className="flex items-center gap-1">
+
+            <span
+              className="hidden sm:block
+                         text-xs text-[#5f6368]
+                         mr-1"
+            >
+              {rangeStart}–{rangeEnd} of {messages.length}
+            </span>
+
+
+            {/* Previous */}
+            <button
+              className="w-9 h-9 flex items-center justify-center
+                         rounded-full border-none
+                         bg-transparent
+                         text-[#5f6368] text-2xl
+                         cursor-pointer
+                         hover:bg-[#f1f3f4]
+                         disabled:opacity-40
+                         disabled:cursor-default"
+              title="Previous page"
+              onClick={handlePrevious}
+              disabled={pageIndex === 0 || pageLoading}
+            >
+              ‹
+            </button>
+
+
+            {/* Next */}
+            <button
+              className="w-9 h-9 flex items-center justify-center
+                         rounded-full border-none
+                         bg-transparent
+                         text-[#5f6368] text-2xl
+                         cursor-pointer
+                         hover:bg-[#f1f3f4]
+                         disabled:opacity-40
+                         disabled:cursor-default"
+              title="Next page"
+              onClick={handleNext}
+              disabled={!hasNext || pageLoading}
+            >
+              ›
+            </button>
+
+          </div>
+
+        </div>
+
+
+        {/* =================================================
+            EMAIL LIST
+        ================================================== */}
+        <div className="flex-1 overflow-y-auto">
+
+          {/* Page loading */}
+          {pageLoading ? (
+            <div className="h-full flex items-center justify-center">
+              <div
+                className="w-9 h-9 rounded-full
+                           border-[3px] border-[#dadce0]
+                           border-t-[#1a73e8]
+                           animate-spin"
+              />
+            </div>
+
+          ) : filteredMessages.length === 0 ? (
+
+            /* Empty inbox */
+            <div
+              className="h-full flex flex-col
+                         items-center justify-center
+                         text-center px-5"
+            >
+              <div className="text-5xl mb-4">
+                📭
+              </div>
+
+              <h3 className="text-base font-medium text-[#3c4043]">
+                No emails found
+              </h3>
+
+              <p className="mt-2 text-sm text-[#5f6368]">
+                Your Gmail inbox doesn't contain matching messages.
+              </p>
+            </div>
+
+          ) : (
+
+            /* Email rows */
+            filteredMessages.map((message) => (
+
+              <div
+                key={message.message_id}
+                onClick={() => openEmail(message.message_id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    openEmail(message.message_id);
+                  }
+                }}
+                className="group
+                           h-[54px]
+                           flex items-center
+                           px-3 md:px-4
+                           border-b border-[#e6e8ec]
+                           bg-white
+                           cursor-pointer
+                           transition-all duration-150
+                           hover:bg-[#f2f6fc]
+                           hover:shadow-[0_1px_2px_rgba(60,64,67,0.15)]"
+              >
+
+                {/* Checkbox */}
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-9 shrink-0
+                             flex items-center justify-center
+                             text-[#5f6368]
+                             text-lg"
+                >
+                  □
+                </div>
+
+
+                {/* Star */}
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-9 shrink-0
+                             flex items-center justify-center
+                             text-[#5f6368]
+                             text-xl
+                             hover:text-[#f4b400]"
+                >
+                  ☆
+                </div>
+
+
+                {/* Sender */}
+                <div
+                  className="hidden sm:block
+                             w-[100px] shrink-0
+                             text-sm font-medium
+                             text-[#3c4043]
+                             truncate"
+                >
+                  Gmail
+                </div>
+
+
+                {/* Subject */}
+                <div
+                  className="flex-1 min-w-0
+                             flex items-center
+                             gap-2"
+                >
+                  <strong
+                    className="text-sm font-medium
+                               text-[#202124]
+                               truncate"
+                  >
+                    {message.name}
+                  </strong>
+
+                  <span
+                    className="hidden md:inline
+                               text-sm text-[#5f6368]
+                               truncate"
+                  >
+                    — Click to open and analyze this email
+                  </span>
+                </div>
+
+
+                {/* Message ID */}
+                <div
+                  className="hidden lg:block
+                             max-w-[180px]
+                             ml-4
+                             text-[11px]
+                             text-[#9aa0a6]
+                             font-mono
+                             truncate"
+                >
+                  {message.message_id}
+                </div>
+
+
+                {/* Arrow */}
+                <div
+                  className="w-8 shrink-0
+                             flex items-center justify-center
+                             text-[#5f6368]
+                             text-2xl
+                             opacity-0
+                             group-hover:opacity-100
+                             transition-opacity"
+                  aria-hidden="true"
+                >
+                  ›
+                </div>
+
+              </div>
+
+            ))
+          )}
+
+        </div>
+
+      </main>
+
+    </div>
+  </div>
+);
+}
 export default Dashboard;
