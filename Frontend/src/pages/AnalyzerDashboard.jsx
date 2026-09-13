@@ -1703,9 +1703,10 @@ useEffect(() => {
                       </div>
 
 
-                      {/* Run / Open button */}
+                      {/* Open analysis tool button */}
 
                       <button
+                        type="button"
                         onClick={() => {
                           if (!analysis || analysis.loading) return;
 
@@ -1714,8 +1715,11 @@ useEffect(() => {
                           );
                         }}
                         disabled={!analysis || analysis.loading}
+                        aria-label={`Open ${tool.label}`}
                         className={`
-                          mt-3 px-4 py-2 rounded-lg border text-xs font-medium transition
+                          mt-3 inline-flex items-center justify-center gap-2
+                          px-4 py-2 rounded-lg border text-xs font-semibold
+                          transition
                           ${
                             !analysis || analysis.loading
                               ? "border-[#dadce0] bg-[#f1f3f4] text-[#9aa0a6] cursor-not-allowed"
@@ -1723,7 +1727,11 @@ useEffect(() => {
                           }
                         `}
                       >
-                        {analysis?.loading ? "Locked" : "Open"}
+                        {analysis?.loading
+                          ? "Locked"
+                          : tool.key === "analyze"
+                          ? "Open Email Analyzer"
+                          : "Open"}
                       </button>
 
                       {/* Error */}
