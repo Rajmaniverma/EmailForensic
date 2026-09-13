@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 const API_URL = "https://emailforensic.onrender.com";
@@ -39,7 +39,6 @@ function EmailDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // { [key]: { loading, result, error } }
   const [analysis, setAnalysis] = useState({});
 
   const getToken = () => localStorage.getItem("access_token");
@@ -57,9 +56,15 @@ function EmailDetail() {
         return;
       }
 
+      if (!messageId) {
+        setError("No Gmail message ID was provided.");
+        setLoading(false);
+        return;
+      }
+
       try {
         const response = await fetch(
-          `${API_URL}/gmail/message/${messageId}`,
+          `${API_URL}/gmail/message/${encodeURIComponent(messageId)}`,
           {
             method: "GET",
             headers: {
@@ -76,7 +81,10 @@ function EmailDetail() {
 
         console.log("Gmail message detail:", data);
 
-        setEmail(data.message || data);
+        // IMPORTANT:
+        // Backend returns the email inside `email`.
+        setEmail(data.email || data.message || data);
+
       } catch (err) {
         console.error("Email detail error:", err);
         setError("This email couldn't be loaded.");
@@ -104,7 +112,7 @@ function EmailDetail() {
       ...prev,
       [tool.key]: {
         loading: true,
-        result: prev[tool.key]?.result,
+        result: prev[tool.key]?.result || null,
         error: null,
       },
     }));
@@ -154,7 +162,7 @@ function EmailDetail() {
 
   if (loading) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#f6f8fc] text-[#5f6368] text-sm">
+      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#f6f8fc] text-[#5f6368]">
         <div
           className="
             w-9 h-9
@@ -166,7 +174,9 @@ function EmailDetail() {
           "
         />
 
-        <p>Opening email…</p>
+        <p className="text-sm">
+          Opening email…
+        </p>
       </div>
     );
   }
@@ -175,605 +185,1151 @@ function EmailDetail() {
   // EMAIL DATA
   // =====================================================
 
-  const subject = email?.name || email?.subject;
-  const from = email?.from || email?.sender;
-  const date = email?.date;
-  const body = email?.body || email?.snippet;
-  const attachments = email?.attachments;
+  const subject =
+    email?.subject ||
+    email?.name ||
+    "(No subject)";
 
-  // =====================================================
-  // MAIN UI
-  // =====================================================
+  const from =
+    email?.from ||
+    email?.sender ||
+    email?.sender_email ||
+    "Unknown sender";
+
+  const senderName =
+    email?.sender_name ||
+    email?.from_name ||
+    from;
+
+  const senderEmail =
+    email?.sender_email ||
+    email?.email ||
+    extractEmail(from);
+
+  const date =
+    email?.date ||
+    email?.timestamp ||
+    "";
+
+  const snippet =
+    email?.snippet ||
+    "";
+
+  const body =
+    email?.body ||
+    email?.text ||
+    snippet ||
+    "";
+
+  const htmlBody =
+    email?.html_body ||
+    email?.html ||
+    email?.body_html ||
+    null;
+
+  const attachments = Array.isArray(email?.attachments)
+    ? email.attachments
+    : [];
+
+  // Detect whether body itself contains HTML
+  const bodyLooksLikeHtml =
+    typeof body === "string" &&
+    /<\/?[a-z][\s\S]*>/i.test(body);
+
+  const actualHtml =
+    htmlBody ||
+    (bodyLooksLikeHtml ? body : null);
 
   return (
     <div
       className="
         h-screen
+        w-full
         flex flex-col
         bg-[#f6f8fc]
-        text-[#1f1f1f]
+        text-[#202124]
         font-sans
         overflow-hidden
       "
     >
 
-      {/* =================================================
-          TOP ACTION BAR
-      ================================================== */}
+      {/* ===================================================
+          GMAIL TOP HEADER
+      ==================================================== */}
 
       <header
         className="
-          h-[60px]
-          min-h-[60px]
-          flex items-center justify-between
-          px-5
-          bg-white
-          border-b border-[#e6e8ec]
+          h-[64px]
+          min-h-[64px]
+          flex items-center
+          px-4
+          bg-[#f6f8fc]
         "
       >
 
-        {/* Back */}
-        <button
-          onClick={() => navigate("/dashboard")}
+        {/* Menu + Gmail logo */}
+
+        <div
           className="
-            flex items-center gap-2
-            px-3 py-2
-            rounded-md
-            border-none
-            bg-transparent
-            text-sm
-            text-[#5f6368]
-            cursor-pointer
-            hover:bg-[#f1f3f4]
-            hover:text-[#1f1f1f]
-            transition-colors
+            flex items-center
+            gap-3
+            w-[250px]
+            shrink-0
           "
         >
-          <span className="text-lg" aria-hidden="true">
-            ←
+          <button
+            className="
+              w-10 h-10
+              rounded-full
+              flex items-center justify-center
+              border-none
+              bg-transparent
+              text-[#5f6368]
+              text-xl
+              cursor-pointer
+              hover:bg-[#e8eaed]
+            "
+            aria-label="Main menu"
+          >
+            ☰
+          </button>
+
+          {/* Gmail-style logo */}
+
+          <div className="flex items-center gap-2">
+            <div
+              className="
+                text-3xl
+                font-bold
+                leading-none
+                bg-gradient-to-r
+                from-[#4285f4]
+                via-[#ea4335]
+                to-[#34a853]
+                bg-clip-text
+                text-transparent
+              "
+            >
+              M
+            </div>
+
+            <span
+              className="
+                text-[22px]
+                text-[#3c4043]
+                font-normal
+              "
+            >
+              Gmail
+            </span>
+          </div>
+        </div>
+
+
+        {/* Search */}
+
+        <div
+          className="
+            hidden md:flex
+            flex-1
+            max-w-[820px]
+            h-[48px]
+            items-center
+            px-4
+            bg-[#e9eef6]
+            rounded-full
+          "
+        >
+
+          <span className="text-[#5f6368] text-xl">
+            🔍
           </span>
 
-          Back to Inbox
-        </button>
-
-
-        {/* Toolbar Actions */}
-        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            placeholder="Search mail"
+            className="
+              flex-1
+              ml-3
+              bg-transparent
+              outline-none
+              border-none
+              text-sm
+              text-[#202124]
+              placeholder:text-[#5f6368]
+            "
+          />
 
           <button
             className="
-              w-[38px] h-[38px]
+              w-9 h-9
               flex items-center justify-center
               rounded-full
               border-none
               bg-transparent
               text-[#5f6368]
-              text-[15px]
+              hover:bg-[#dfe5ee]
               cursor-pointer
-              hover:bg-[#f1f3f4]
-              transition-colors
             "
-            title="Archive"
+            title="Search options"
           >
-            🗃
-          </button>
-
-          <button
-            className="
-              w-[38px] h-[38px]
-              flex items-center justify-center
-              rounded-full
-              border-none
-              bg-transparent
-              text-[#5f6368]
-              text-[15px]
-              cursor-pointer
-              hover:bg-[#f1f3f4]
-              transition-colors
-            "
-            title="Report spam"
-          >
-            🚫
-          </button>
-
-          <button
-            className="
-              w-[38px] h-[38px]
-              flex items-center justify-center
-              rounded-full
-              border-none
-              bg-transparent
-              text-[#5f6368]
-              text-[15px]
-              cursor-pointer
-              hover:bg-[#f1f3f4]
-              transition-colors
-            "
-            title="Delete"
-          >
-            🗑
-          </button>
-
-          <button
-            className="
-              w-[38px] h-[38px]
-              flex items-center justify-center
-              rounded-full
-              border-none
-              bg-transparent
-              text-[#5f6368]
-              text-[15px]
-              cursor-pointer
-              hover:bg-[#f1f3f4]
-              transition-colors
-            "
-            title="More"
-          >
-            ⋮
+            ☷
           </button>
 
         </div>
+
+
+        {/* Right header */}
+
+        <div
+          className="
+            ml-auto
+            flex items-center
+            gap-1
+          "
+        >
+
+          <button
+            className={headerButtonClass}
+            title="Help"
+          >
+            ?
+          </button>
+
+          <button
+            className={headerButtonClass}
+            title="Settings"
+          >
+            ⚙
+          </button>
+
+          <button
+            className={headerButtonClass}
+            title="Google apps"
+          >
+            ✦
+          </button>
+
+          <button
+            className={headerButtonClass}
+            title="Google apps"
+          >
+            ⋮⋮
+          </button>
+
+          <div
+            className="
+              ml-2
+              w-9 h-9
+              rounded-full
+              bg-[#137333]
+              text-white
+              flex items-center justify-center
+              font-medium
+              border-2
+              border-[#aecbfa]
+            "
+          >
+            R
+          </div>
+
+        </div>
+
       </header>
 
 
-      {/* =================================================
-          BODY
-      ================================================== */}
+      {/* ===================================================
+          MAIN GMAIL AREA
+      ==================================================== */}
 
       <div
         className="
           flex-1
-          flex
-          gap-4
-          p-4
           min-h-0
-          overflow-hidden
+          flex
         "
       >
 
         {/* =================================================
-            EMAIL CONTENT PANEL
-        ================================================== */}
-
-        <main
-          className="
-            flex-1
-            min-w-0
-            bg-white
-            rounded-[10px]
-            shadow-[0_1px_2px_rgba(60,64,67,0.08),0_1px_3px_rgba(60,64,67,0.08)]
-            px-6 md:px-10
-            py-8
-            overflow-y-auto
-          "
-        >
-
-          {error ? (
-
-            <div className="text-sm text-[#c5221f]">
-              {error}
-            </div>
-
-          ) : (
-
-            <>
-
-              {/* Subject */}
-              <h1
-                className="
-                  text-[22px]
-                  font-medium
-                  leading-tight
-                  m-0
-                  mb-5
-                  text-[#1f1f1f]
-                  break-words
-                "
-              >
-                {subject || "(No subject available)"}
-              </h1>
-
-
-              {/* =================================================
-                  EMAIL META
-              ================================================== */}
-
-              <div
-                className="
-                  flex items-center
-                  gap-3.5
-                  pb-5
-                  mb-6
-                  border-b border-[#e6e8ec]
-                "
-              >
-
-                {/* Avatar */}
-                <div
-                  className="
-                    w-10 h-10
-                    shrink-0
-                    rounded-full
-                    flex items-center justify-center
-                    bg-[#1a73e8]
-                    text-white
-                    font-semibold
-                  "
-                  aria-hidden="true"
-                >
-                  {(from || "?").charAt(0).toUpperCase()}
-                </div>
-
-
-                {/* Sender */}
-                <div className="min-w-0">
-
-                  <div
-                    className="
-                      text-sm
-                      font-medium
-                      text-[#1f1f1f]
-                      break-words
-                    "
-                  >
-                    {from || "Sender information unavailable"}
-                  </div>
-
-                  {date && (
-                    <div
-                      className="
-                        text-xs
-                        text-[#5f6368]
-                        mt-0.5
-                      "
-                    >
-                      {date}
-                    </div>
-                  )}
-
-                </div>
-
-              </div>
-
-
-              {/* =================================================
-                  EMAIL BODY
-              ================================================== */}
-
-              <div
-                className="
-                  text-sm
-                  leading-[1.7]
-                  text-[#1f1f1f]
-                  whitespace-pre-wrap
-                  break-words
-                "
-              >
-                {body ? (
-                  body
-                ) : (
-                  <span
-                    className="
-                      text-[#5f6368]
-                      italic
-                    "
-                  >
-                    This email has no body content available from the
-                    backend.
-                  </span>
-                )}
-              </div>
-
-
-              {/* =================================================
-                  ATTACHMENTS
-              ================================================== */}
-
-              {Array.isArray(attachments) &&
-                attachments.length > 0 && (
-                  <div
-                    className="
-                      mt-7
-                      pt-5
-                      border-t border-[#e6e8ec]
-                    "
-                  >
-
-                    <div
-                      className="
-                        text-[13px]
-                        font-medium
-                        text-[#5f6368]
-                        mb-2.5
-                      "
-                    >
-                      Attachments ({attachments.length})
-                    </div>
-
-
-                    <div
-                      className="
-                        flex flex-wrap
-                        gap-2
-                      "
-                    >
-                      {attachments.map((att, i) => (
-                        <div
-                          key={i}
-                          className="
-                            border border-[#e6e8ec]
-                            rounded-lg
-                            px-3 py-2
-                            text-[13px]
-                            bg-[#f8f9fa]
-                            text-[#3c4043]
-                            break-all
-                          "
-                        >
-                          📎{" "}
-                          {att.name ||
-                            att.filename ||
-                            `Attachment ${i + 1}`}
-                        </div>
-                      ))}
-                    </div>
-
-                  </div>
-                )}
-
-
-              {/* =================================================
-                  MESSAGE ID
-              ================================================== */}
-
-              <div
-                className="
-                  mt-8
-                  text-[11px]
-                  text-[#9aa0a6]
-                "
-              >
-                Message ID:{" "}
-                <code
-                  className="
-                    font-mono
-                    break-all
-                  "
-                >
-                  {messageId}
-                </code>
-              </div>
-
-            </>
-          )}
-
-        </main>
-
-
-        {/* =================================================
-            MAILGUARD SECURITY PANEL
+            LEFT SIDEBAR
         ================================================== */}
 
         <aside
           className="
-            w-[340px]
+            hidden lg:flex
+            w-[250px]
             shrink-0
-            bg-white
-            rounded-[10px]
-            shadow-[0_1px_2px_rgba(60,64,67,0.08),0_1px_3px_rgba(60,64,67,0.08)]
-            p-5
+            flex-col
+            bg-[#f6f8fc]
+            px-2
             overflow-y-auto
           "
         >
 
-          {/* Panel Header */}
-          <div
+          {/* Compose */}
+
+          <button
+            onClick={() => navigate("/analyzer")}
             className="
-              flex items-center
-              gap-2
-              text-sm
-              font-semibold
-              text-[#1e7e5a]
-              pb-4
+              w-fit
+              min-w-[150px]
+              h-[56px]
+              px-5
               mb-4
-              border-b border-[#e6e8ec]
+              flex items-center
+              gap-3
+              rounded-2xl
+              border-none
+              bg-[#c2e7ff]
+              text-[#001d35]
+              text-sm
+              font-medium
+              cursor-pointer
+              hover:shadow-md
+              transition-shadow
             "
           >
-            <span aria-hidden="true">
-              🛡
+            <span className="text-xl">
+              ✎
             </span>
 
-            MailGuard Security Analysis
+            Compose
+          </button>
+
+
+          {/* Inbox */}
+
+          <button
+            className="
+              h-9
+              w-full
+              flex items-center
+              gap-4
+              px-4
+              rounded-r-full
+              border-none
+              bg-[#d3e3fd]
+              text-[#001d35]
+              text-sm
+              font-medium
+              text-left
+            "
+          >
+            <span>📥</span>
+
+            <span className="flex-1">
+              Inbox
+            </span>
+
+            <span className="font-semibold">
+              1,797
+            </span>
+          </button>
+
+
+          <SidebarItem icon="☆" label="Starred" />
+          <SidebarItem icon="◷" label="Snoozed" />
+          <SidebarItem icon="➤" label="Sent" />
+
+          <SidebarItem
+            icon="📝"
+            label="Drafts"
+            count="1"
+            bold
+          />
+
+          <SidebarItem
+            icon="🛍"
+            label="Purchases"
+            count="5"
+            bold
+          />
+
+          <SidebarItem icon="⌄" label="More" />
+
+
+          {/* Labels */}
+
+          <div className="mt-7 px-4">
+
+            <div
+              className="
+                flex items-center
+                justify-between
+                mb-3
+              "
+            >
+              <span className="font-medium text-sm">
+                Labels
+              </span>
+
+              <button
+                className="
+                  text-xl
+                  text-[#5f6368]
+                  border-none
+                  bg-transparent
+                  cursor-pointer
+                "
+              >
+                +
+              </button>
+            </div>
+
           </div>
 
 
-          {/* Tools */}
-          <div className="flex flex-col gap-5">
+          {/* MailGuard */}
 
-            {ANALYSIS_TOOLS.map((tool) => {
-              const state = analysis[tool.key];
+          <div
+            className="
+              mt-3
+              px-3
+              pb-5
+            "
+          >
 
-              return (
+            <div
+              className="
+                flex items-center
+                gap-2
+                px-2
+                pb-3
+                mb-2
+                border-b
+                border-[#dadce0]
+                text-sm
+                font-semibold
+                text-[#1e7e5a]
+              "
+            >
+              🛡
+              MailGuard Security
+            </div>
+
+
+            <button
+              onClick={() => navigate("/phishing")}
+              className={securitySidebarClass}
+            >
+              🎣
+              Phishing Detection
+            </button>
+
+            <button
+              onClick={() => navigate("/social")}
+              className={securitySidebarClass}
+            >
+              👥
+              Social Analysis
+            </button>
+
+            <button
+              onClick={() =>
+                navigate(
+                  `/ip-tracing?message_id=${messageId}`
+                )
+              }
+              className={securitySidebarClass}
+            >
+              🌐
+              IP Tracing
+            </button>
+
+            <button
+              onClick={() => navigate("/analyzer")}
+              className={securitySidebarClass}
+            >
+              🔍
+              Email Analyzer
+            </button>
+
+          </div>
+
+        </aside>
+
+
+        {/* =================================================
+            EMAIL + SECURITY
+        ================================================== */}
+
+        <div
+          className="
+            flex-1
+            min-w-0
+            flex
+            flex-col
+            overflow-hidden
+          "
+        >
+
+          {/* =================================================
+              GMAIL MESSAGE TOOLBAR
+          ================================================== */}
+
+          <div
+            className="
+              h-[56px]
+              min-h-[56px]
+              flex items-center
+              justify-between
+              px-4
+              bg-white
+              border-b
+              border-[#e5e7eb]
+            "
+          >
+
+            <div className="flex items-center gap-1">
+
+              {/* Back */}
+
+              <button
+                onClick={() => navigate("/dashboard")}
+                className={messageToolbarButton}
+                title="Back to Inbox"
+              >
+                ←
+              </button>
+
+
+              {/* Archive */}
+
+              <button
+                className={messageToolbarButton}
+                title="Archive"
+              >
+                ▣
+              </button>
+
+
+              {/* Report spam */}
+
+              <button
+                className={messageToolbarButton}
+                title="Report spam"
+              >
+                !
+              </button>
+
+
+              {/* Delete */}
+
+              <button
+                className={messageToolbarButton}
+                title="Delete"
+              >
+                🗑
+              </button>
+
+
+              <div className="h-6 w-px bg-[#dadce0] mx-2" />
+
+
+              {/* Mark unread */}
+
+              <button
+                className={messageToolbarButton}
+                title="Mark as unread"
+              >
+                ✉
+              </button>
+
+
+              {/* Snooze */}
+
+              <button
+                className={messageToolbarButton}
+                title="Snooze"
+              >
+                ◷
+              </button>
+
+
+              {/* More */}
+
+              <button
+                className={messageToolbarButton}
+                title="More"
+              >
+                ⋮
+              </button>
+
+            </div>
+
+
+            {/* Right */}
+
+            <div className="flex items-center gap-1">
+
+              <button
+                className={messageToolbarButton}
+                title="Previous"
+              >
+                ‹
+              </button>
+
+              <button
+                className={messageToolbarButton}
+                title="Next"
+              >
+                ›
+              </button>
+
+            </div>
+
+          </div>
+
+
+          {/* =================================================
+              MESSAGE AREA
+          ================================================== */}
+
+          <div
+            className="
+              flex-1
+              min-h-0
+              flex
+              gap-4
+              p-0
+              overflow-hidden
+            "
+          >
+
+            {/* =================================================
+                GMAIL MESSAGE
+            ================================================== */}
+
+            <main
+              className="
+                flex-1
+                min-w-0
+                bg-white
+                overflow-y-auto
+              "
+            >
+
+              {error ? (
+
                 <div
                   className="
-                    flex flex-col
-                    gap-2.5
+                    p-8
+                    text-sm
+                    text-[#c5221f]
                   "
-                  key={tool.key}
                 >
+                  {error}
+                </div>
 
-                  {/* Tool Header */}
+              ) : (
+
+                <article className="max-w-[1100px]">
+
+                  {/* =========================================
+                      SUBJECT
+                  ========================================== */}
+
                   <div
                     className="
-                      flex items-start
-                      gap-2.5
+                      px-6
+                      md:px-10
+                      pt-7
                     "
                   >
 
-                    <span
+                    <div
                       className="
-                        text-lg
-                        mt-0.5
-                        shrink-0
+                        flex
+                        items-center
+                        gap-2
+                        flex-wrap
                       "
                     >
-                      {tool.icon}
-                    </span>
+
+                      <h1
+                        className="
+                          text-[24px]
+                          md:text-[26px]
+                          font-normal
+                          text-[#202124]
+                          leading-tight
+                          break-words
+                        "
+                      >
+                        {subject}
+                      </h1>
 
 
-                    <div className="min-w-0">
+                      {/* Inbox label */}
+
+                      <span
+                        className="
+                          px-2
+                          py-1
+                          rounded
+                          bg-[#e8eaed]
+                          text-[11px]
+                          text-[#5f6368]
+                        "
+                      >
+                        Inbox
+                      </span>
+
+                    </div>
+
+                  </div>
+
+
+                  {/* =========================================
+                      SENDER HEADER
+                  ========================================== */}
+
+                  <div
+                    className="
+                      px-6
+                      md:px-10
+                      py-5
+                      flex
+                      items-start
+                      gap-4
+                    "
+                  >
+
+                    {/* Avatar */}
+
+                    <div
+                      className="
+                        w-10
+                        h-10
+                        shrink-0
+                        rounded-full
+                        bg-[#1a73e8]
+                        text-white
+                        flex
+                        items-center
+                        justify-center
+                        font-medium
+                        text-lg
+                      "
+                    >
+                      {(senderName || "?")
+                        .charAt(0)
+                        .toUpperCase()}
+                    </div>
+
+
+                    {/* Sender details */}
+
+                    <div className="flex-1 min-w-0">
 
                       <div
                         className="
-                          text-[13px]
-                          font-medium
-                          text-[#1f1f1f]
+                          flex
+                          items-center
+                          gap-2
+                          flex-wrap
                         "
                       >
-                        {tool.label}
+
+                        <span
+                          className="
+                            font-medium
+                            text-sm
+                            text-[#202124]
+                          "
+                        >
+                          {senderName}
+                        </span>
+
+                        <span
+                          className="
+                            text-xs
+                            text-[#5f6368]
+                          "
+                        >
+                          &lt;{senderEmail}&gt;
+                        </span>
+
                       </div>
+
 
                       <div
                         className="
                           text-xs
                           text-[#5f6368]
-                          mt-0.5
-                          leading-relaxed
+                          mt-1
                         "
                       >
-                        {tool.description}
+                        to me
+                        <span className="ml-1">
+                          ▾
+                        </span>
                       </div>
+
+                    </div>
+
+
+                    {/* Date */}
+
+                    <div
+                      className="
+                        hidden sm:block
+                        text-xs
+                        text-[#5f6368]
+                        whitespace-nowrap
+                      "
+                    >
+                      {formatDate(date)}
+                    </div>
+
+
+                    {/* Message actions */}
+
+                    <div className="flex items-center gap-1">
+
+                      <button
+                        className={smallIconButton}
+                        title="Star"
+                      >
+                        ☆
+                      </button>
+
+                      <button
+                        className={smallIconButton}
+                        title="Reply"
+                      >
+                        ↩
+                      </button>
+
+                      <button
+                        className={smallIconButton}
+                        title="More"
+                      >
+                        ⋮
+                      </button>
 
                     </div>
 
                   </div>
 
 
-                  {/* Analyze Button */}
-                  <button
-                    onClick={() => runAnalysis(tool)}
-                    disabled={state?.loading}
+                  {/* =========================================
+                      EMAIL CONTENT
+                  ========================================== */}
+
+                  <div
                     className="
-                      self-start
-                      border border-[#1e7e5a]
-                      bg-[#e6f4ee]
-                      text-[#1e7e5a]
-                      text-[12.5px]
-                      font-medium
-                      px-3.5 py-1.5
-                      rounded-md
-                      cursor-pointer
-                      transition-colors
-                      hover:bg-[#d3ece0]
-                      disabled:opacity-60
-                      disabled:cursor-default
+                      px-6
+                      md:px-10
+                      pb-8
+                      text-sm
+                      text-[#202124]
                     "
                   >
-                    {state?.loading
-                      ? "Analyzing…"
-                      : state?.result
-                      ? "Re-analyze"
-                      : "Analyze"}
-                  </button>
+
+                    {actualHtml ? (
+
+                      /*
+                       * Email HTML is isolated inside a sandboxed
+                       * iframe so that scripts contained in an
+                       * untrusted email cannot execute in your app.
+                       */
+                      <div
+                        className="
+                          w-full
+                          min-h-[350px]
+                          overflow-hidden
+                        "
+                      >
+                        <iframe
+                          title="Email content"
+                          srcDoc={actualHtml}
+                          sandbox=""
+                          className="
+                            w-full
+                            min-h-[500px]
+                            border-0
+                            bg-white
+                          "
+                        />
+                      </div>
+
+                    ) : body ? (
+
+                      <div
+                        className="
+                          whitespace-pre-wrap
+                          break-words
+                          leading-7
+                          max-w-[900px]
+                        "
+                      >
+                        {body}
+                      </div>
+
+                    ) : (
+
+                      <div
+                        className="
+                          py-10
+                          text-sm
+                          text-[#5f6368]
+                          italic
+                        "
+                      >
+                        This email has no body content available
+                        from the backend.
+                      </div>
+
+                    )}
+
+                  </div>
 
 
-                  {/* Error */}
-                  {state?.error && (
+                  {/* =========================================
+                      ATTACHMENTS
+                  ========================================== */}
+
+                  {attachments.length > 0 && (
+
                     <div
                       className="
-                        text-[11.5px]
-                        text-[#c5221f]
-                        bg-[#f8f9fa]
-                        border border-[#e6e8ec]
-                        rounded-md
-                        p-2.5
+                        mx-6
+                        md:mx-10
+                        pt-5
+                        border-t
+                        border-[#e5e7eb]
                       "
                     >
-                      {state.error}
+
+                      <div
+                        className="
+                          text-sm
+                          font-medium
+                          text-[#3c4043]
+                          mb-3
+                        "
+                      >
+                        {attachments.length} Attachment
+                        {attachments.length !== 1 ? "s" : ""}
+                      </div>
+
+
+                      <div
+                        className="
+                          flex
+                          flex-wrap
+                          gap-3
+                        "
+                      >
+
+                        {attachments.map((att, index) => (
+
+                          <div
+                            key={index}
+                            className="
+                              min-w-[190px]
+                              max-w-[280px]
+                              flex
+                              items-center
+                              gap-3
+                              px-3
+                              py-3
+                              border
+                              border-[#dadce0]
+                              rounded-lg
+                              bg-white
+                              hover:bg-[#f8f9fa]
+                              cursor-pointer
+                            "
+                          >
+
+                            <span className="text-xl">
+                              📎
+                            </span>
+
+                            <div className="min-w-0">
+
+                              <div
+                                className="
+                                  text-sm
+                                  font-medium
+                                  truncate
+                                "
+                              >
+                                {att.name ||
+                                  att.filename ||
+                                  `Attachment ${index + 1}`}
+                              </div>
+
+                              {att.size && (
+                                <div
+                                  className="
+                                    text-xs
+                                    text-[#5f6368]
+                                    mt-1
+                                  "
+                                >
+                                  {att.size}
+                                </div>
+                              )}
+
+                            </div>
+
+                          </div>
+
+                        ))}
+
+                      </div>
+
                     </div>
+
                   )}
 
 
-                  {/* Result */}
-                  {state?.result && !state.loading && (
-                    <pre
+                  {/* =========================================
+                      REPLY / FORWARD
+                  ========================================== */}
+
+                  <div
+                    className="
+                      px-6
+                      md:px-10
+                      py-8
+                      flex
+                      items-center
+                      gap-3
+                    "
+                  >
+
+                    <button
                       className="
-                        text-[11.5px]
-                        leading-relaxed
-                        bg-[#f8f9fa]
-                        border border-[#e6e8ec]
-                        rounded-md
-                        p-2.5
-                        max-h-[180px]
-                        overflow-auto
-                        whitespace-pre-wrap
-                        break-words
-                        text-[#1f1f1f]
-                        font-mono
+                        flex
+                        items-center
+                        gap-2
+                        px-5
+                        py-2
+                        rounded-full
+                        border
+                        border-[#747775]
+                        bg-white
+                        text-sm
+                        text-[#3c4043]
+                        hover:bg-[#f1f3f4]
+                        cursor-pointer
                       "
                     >
-                      {JSON.stringify(
-                        state.result,
-                        null,
-                        2
-                      )}
-                    </pre>
-                  )}
+                      ↩
+                      Reply
+                    </button>
 
-                </div>
-              );
-            })}
+
+                    <button
+                      className="
+                        flex
+                        items-center
+                        gap-2
+                        px-5
+                        py-2
+                        rounded-full
+                        border
+                        border-[#747775]
+                        bg-white
+                        text-sm
+                        text-[#3c4043]
+                        hover:bg-[#f1f3f4]
+                        cursor-pointer
+                      "
+                    >
+                      ↪
+                      Forward
+                    </button>
+
+                  </div>
+
+
+                  {/* Message ID */}
+
+                  <div
+                    className="
+                      px-6
+                      md:px-10
+                      pb-8
+                      text-[11px]
+                      text-[#9aa0a6]
+                    "
+                  >
+                    Message ID:{" "}
+                    <code className="font-mono break-all">
+                      {messageId}
+                    </code>
+                  </div>
+
+                </article>
+
+              )}
+
+            </main>
 
 
             {/* =================================================
-                IP TRACING
+                MAILGUARD PANEL
             ================================================== */}
 
-            <div
+            <aside
               className="
-                flex flex-col
-                gap-2.5
+                hidden xl:flex
+                w-[340px]
+                shrink-0
+                m-3
+                ml-0
+                rounded-xl
+                bg-white
+                border
+                border-[#e5e7eb]
+                shadow-sm
+                flex-col
+                overflow-hidden
               "
             >
 
+              {/* Header */}
+
               <div
                 className="
-                  flex items-start
-                  gap-2.5
+                  px-5
+                  py-4
+                  border-b
+                  border-[#e5e7eb]
+                  flex
+                  items-center
+                  gap-2
                 "
               >
 
-                <span
-                  className="
-                    text-lg
-                    mt-0.5
-                    shrink-0
-                  "
-                >
-                  🌐
+                <span className="text-lg">
+                  🛡️
                 </span>
 
                 <div>
 
                   <div
                     className="
-                      text-[13px]
-                      font-medium
-                      text-[#1f1f1f]
+                      text-sm
+                      font-semibold
+                      text-[#1e7e5a]
                     "
                   >
-                    IP Tracing
+                    MailGuard
                   </div>
 
                   <div
                     className="
                       text-xs
                       text-[#5f6368]
-                      mt-0.5
-                      leading-relaxed
                     "
                   >
-                    Trace originating IPs from this email's headers.
+                    Security Analysis
                   </div>
 
                 </div>
@@ -781,37 +1337,384 @@ function EmailDetail() {
               </div>
 
 
-              <button
-                onClick={() =>
-                  navigate(
-                    `/ip-tracing?message_id=${messageId}`
-                  )
-                }
+              {/* Tools */}
+
+              <div
                 className="
-                  self-start
-                  border border-[#1e7e5a]
-                  bg-[#e6f4ee]
-                  text-[#1e7e5a]
-                  text-[12.5px]
-                  font-medium
-                  px-3.5 py-1.5
-                  rounded-md
-                  cursor-pointer
-                  transition-colors
-                  hover:bg-[#d3ece0]
+                  flex-1
+                  overflow-y-auto
+                  p-4
+                  space-y-5
                 "
               >
-                Trace IP
-              </button>
 
-            </div>
+                {ANALYSIS_TOOLS.map((tool) => {
+
+                  const state = analysis[tool.key];
+
+                  return (
+                    <div
+                      key={tool.key}
+                      className="
+                        pb-5
+                        border-b
+                        border-[#edf0f2]
+                      "
+                    >
+
+                      {/* Tool title */}
+
+                      <div
+                        className="
+                          flex
+                          items-start
+                          gap-3
+                        "
+                      >
+
+                        <span className="text-xl">
+                          {tool.icon}
+                        </span>
+
+                        <div className="min-w-0">
+
+                          <div
+                            className="
+                              text-sm
+                              font-medium
+                              text-[#202124]
+                            "
+                          >
+                            {tool.label}
+                          </div>
+
+                          <div
+                            className="
+                              mt-1
+                              text-xs
+                              leading-5
+                              text-[#5f6368]
+                            "
+                          >
+                            {tool.description}
+                          </div>
+
+                        </div>
+
+                      </div>
+
+
+                      {/* Run button */}
+
+                      <button
+                        onClick={() => runAnalysis(tool)}
+                        disabled={state?.loading}
+                        className="
+                          mt-3
+                          px-4
+                          py-2
+                          rounded-lg
+                          border
+                          border-[#1e7e5a]
+                          bg-[#e6f4ee]
+                          text-[#1e7e5a]
+                          text-xs
+                          font-medium
+                          hover:bg-[#d3ece0]
+                          disabled:opacity-50
+                          disabled:cursor-not-allowed
+                          cursor-pointer
+                        "
+                      >
+                        {state?.loading
+                          ? "Analyzing…"
+                          : state?.result
+                          ? "Re-analyze"
+                          : "Analyze"}
+                      </button>
+
+
+                      {/* Error */}
+
+                      {state?.error && (
+                        <div
+                          className="
+                            mt-3
+                            p-3
+                            rounded-lg
+                            bg-[#fce8e6]
+                            border
+                            border-[#f5c2c0]
+                            text-xs
+                            text-[#c5221f]
+                          "
+                        >
+                          {state.error}
+                        </div>
+                      )}
+
+
+                      {/* Result */}
+
+                      {state?.result &&
+                        !state.loading && (
+                          <pre
+                            className="
+                              mt-3
+                              max-h-[220px]
+                              overflow-auto
+                              p-3
+                              rounded-lg
+                              bg-[#f8f9fa]
+                              border
+                              border-[#e5e7eb]
+                              text-[11px]
+                              leading-5
+                              text-[#202124]
+                              font-mono
+                              whitespace-pre-wrap
+                              break-words
+                            "
+                          >
+                            {JSON.stringify(
+                              state.result,
+                              null,
+                              2
+                            )}
+                          </pre>
+                        )}
+
+                    </div>
+                  );
+                })}
+
+
+                {/* IP Tracing */}
+
+                <div>
+
+                  <div
+                    className="
+                      flex
+                      items-start
+                      gap-3
+                    "
+                  >
+
+                    <span className="text-xl">
+                      🌐
+                    </span>
+
+                    <div>
+
+                      <div
+                        className="
+                          text-sm
+                          font-medium
+                          text-[#202124]
+                        "
+                      >
+                        IP Tracing
+                      </div>
+
+                      <div
+                        className="
+                          mt-1
+                          text-xs
+                          leading-5
+                          text-[#5f6368]
+                        "
+                      >
+                        Trace originating IPs from this
+                        email's headers.
+                      </div>
+
+                    </div>
+
+                  </div>
+
+
+                  <button
+                    onClick={() =>
+                      navigate(
+                        `/ip-tracing?message_id=${messageId}`
+                      )
+                    }
+                    className="
+                      mt-3
+                      px-4
+                      py-2
+                      rounded-lg
+                      border
+                      border-[#1e7e5a]
+                      bg-[#e6f4ee]
+                      text-[#1e7e5a]
+                      text-xs
+                      font-medium
+                      hover:bg-[#d3ece0]
+                      cursor-pointer
+                    "
+                  >
+                    Trace IP
+                  </button>
+
+                </div>
+
+              </div>
+
+            </aside>
 
           </div>
-        </aside>
+
+        </div>
 
       </div>
+
     </div>
   );
 }
+
+
+// =====================================================
+// SMALL COMPONENTS / HELPERS
+// =====================================================
+
+function SidebarItem({
+  icon,
+  label,
+  count,
+  bold = false,
+}) {
+  return (
+    <button
+      className="
+        w-full
+        h-9
+        px-4
+        flex
+        items-center
+        gap-4
+        rounded-r-full
+        border-none
+        bg-transparent
+        text-[#3c4043]
+        text-sm
+        text-left
+        cursor-pointer
+        hover:bg-[#e8eaed]
+      "
+    >
+      <span className="w-5 text-center">
+        {icon}
+      </span>
+
+      <span
+        className={
+          bold
+            ? "flex-1 font-semibold"
+            : "flex-1"
+        }
+      >
+        {label}
+      </span>
+
+      {count && (
+        <span className="text-xs">
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+
+function extractEmail(value) {
+  if (!value) return "";
+
+  const match = value.match(/<([^>]+)>/);
+
+  return match ? match[1] : value;
+}
+
+
+function formatDate(value) {
+  if (!value) return "";
+
+  try {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    return date.toLocaleString([], {
+      hour: "numeric",
+      minute: "2-digit",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return value;
+  }
+}
+
+
+// =====================================================
+// TAILWIND CLASS CONSTANTS
+// =====================================================
+
+const headerButtonClass = `
+  w-10 h-10
+  flex items-center justify-center
+  rounded-full
+  border-none
+  bg-transparent
+  text-[#5f6368]
+  text-lg
+  cursor-pointer
+  hover:bg-[#e8eaed]
+`;
+
+const messageToolbarButton = `
+  w-10 h-10
+  flex items-center justify-center
+  rounded-full
+  border-none
+  bg-transparent
+  text-[#5f6368]
+  text-lg
+  cursor-pointer
+  hover:bg-[#f1f3f4]
+`;
+
+const smallIconButton = `
+  w-9 h-9
+  flex items-center justify-center
+  rounded-full
+  border-none
+  bg-transparent
+  text-[#5f6368]
+  text-lg
+  cursor-pointer
+  hover:bg-[#f1f3f4]
+`;
+
+const securitySidebarClass = `
+  w-full
+  flex
+  items-center
+  gap-3
+  px-3
+  py-2
+  rounded-lg
+  border-none
+  bg-transparent
+  text-[#3c4043]
+  text-xs
+  text-left
+  cursor-pointer
+  hover:bg-[#e8eaed]
+`;
 
 export default EmailDetail;
