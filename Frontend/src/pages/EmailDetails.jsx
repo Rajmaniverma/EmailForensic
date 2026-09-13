@@ -778,6 +778,14 @@ useEffect(() => {
               🛡
               MailGuard Security
             </div>
+            <button
+            
+              onClick={() => navigate(`/analyzer?message_id=${encodeURIComponent(messageId)}`)}
+              className={securitySidebarClass}
+            >
+              🔍
+              Email Analyzer
+            </button>
 
 
             <button
@@ -810,14 +818,7 @@ useEffect(() => {
               IP Tracing
             </button>
 
-            <button
-            
-              onClick={() => navigate(`/analyzer?message_id=${encodeURIComponent(messageId)}`)}
-              className={securitySidebarClass}
-            >
-              🔍
-              Email Analyzer
-            </button>
+
 
           </div>
 
