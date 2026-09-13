@@ -13,24 +13,30 @@ const ANALYSIS_TOOLS = [
     label: "Email Analyzer",
     description: "General forensic analysis of this email.",
     icon: "🔍",
-    path: (id) => `/gmail/analyze/${id}`,
+    page: "/analyzer",
   },
   {
     key: "phishing",
     label: "Phishing Detection",
     description: "Check this email for phishing indicators.",
     icon: "🎣",
-    path: (id) => `/gmail/Phising/${id}`,
+    page: "/phishing",
   },
   {
     key: "social",
     label: "Social Engineering",
     description: "Look for manipulation and impersonation tactics.",
     icon: "👥",
-    path: (id) => `/gmail/Social/${id}`,
+    page: "/social",
+  },
+  {
+    key: "ip",
+    label: "IP Tracing",
+    description: "Trace the originating IP and network information.",
+    icon: "🌐",
+    page: "/ip-tracing",
   },
 ];
-
 // =====================================================
 // MAIN COMPONENT
 // =====================================================
@@ -1568,35 +1574,29 @@ function EmailDetail() {
 
                       {/* Run button */}
 
-                      <button
-                        onClick={() =>
-                          runAnalysis(tool)
-                        }
-                        disabled={state?.loading}
-                        className="
-                          mt-3
-                          px-4
-                          py-2
-                          rounded-lg
-                          border
-                          border-[#1e7e5a]
-                          bg-[#e6f4ee]
-                          text-[#1e7e5a]
-                          text-xs
-                          font-medium
-                          hover:bg-[#d3ece0]
-                          disabled:opacity-50
-                          disabled:cursor-not-allowed
-                          cursor-pointer
-                        "
-                      >
-                        {state?.loading
-                          ? "Analyzing…"
-                          : state?.result
-                          ? "Re-analyze"
-                          : "Analyze"}
-                      </button>
-
+                     <button
+  onClick={() => {
+    navigate(
+      `${tool.page}?message_id=${encodeURIComponent(messageId)}`
+    );
+  }}
+  className="
+    mt-3
+    px-4
+    py-2
+    rounded-lg
+    border
+    border-[#1e7e5a]
+    bg-[#e6f4ee]
+    text-[#1e7e5a]
+    text-xs
+    font-medium
+    hover:bg-[#d3ece0]
+    cursor-pointer
+  "
+>
+  Open
+</button>
 
                       {/* Error */}
 
