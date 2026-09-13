@@ -1,39 +1,55 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
 import "./Dashboard.css";
 
-const API_URL =" https://emailforensic.onrender.com";
+const API_URL = "https://emailforensic.onrender.com";
 
 function Dashboard() {
   const navigate = useNavigate();
 
   const [user, setUser] = useState(null);
+  const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
-  const params = new URLSearchParams(window.location.search);
-  const token = params.get("token");
-  if (token) {
-    localStorage.setItem("access_token", token);
-
-    window.history.replaceState(
-        {},
-        document.title,
-        "/dashboard"
-    );
-}
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const loadDashboard = async () => {
       try {
-        const token = localStorage.getItem("access_token");
-  
+        // =========================================
+        // GET TOKEN FROM URL
+        // =========================================
+
+        const params = new URLSearchParams(window.location.search);
+        const urlToken = params.get("token");
+
+        if (urlToken) {
+          localStorage.setItem("access_token", urlToken);
+
+          // Remove token from browser URL
+          window.history.replaceState(
+            {},
+            document.title,
+            "/dashboard"
+          );
+        }
+
+        // =========================================
+        // GET TOKEN FROM LOCAL STORAGE
+        // =========================================
+
+        const token = urlToken || localStorage.getItem("access_token");
+
         if (!token) {
-          setCheckingAuth(false);
+          navigate("/", { replace: true });
           return;
         }
-  
-        const response = await fetch(
-          "https://emailforensic.onrender.com/auth/status",
+
+        // =========================================
+        // CHECK AUTHENTICATION
+        // =========================================
+
+        const authResponse = await fetch(
+          `${API_URL}/auth/status`,
           {
             method: "GET",
             headers: {
@@ -41,37 +57,74 @@ function Dashboard() {
             },
           }
         );
-  
-        if (!response.ok) {
+
+        if (!authResponse.ok) {
           throw new Error("Failed to check authentication");
         }
-  
-        const data = await response.json();
-  
-        console.log("Dashboard Auth status:", data);
-  
-        if (!data.authenticated === true) {
+
+        const authData = await authResponse.json();
+
+        console.log("Dashboard Auth:", authData);
+
+        if (authData.authenticated !== true) {
+          localStorage.removeItem("access_token");
           navigate("/", { replace: true });
           return;
         }
-  
-        // Token is invalid
-        
-  
+
+        setUser(authData.user);
+
+        // =========================================
+        // GET GMAIL MESSAGES
+        // =========================================
+
+        const gmailResponse = await fetch(
+          `${API_URL}/gmail/messages`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!gmailResponse.ok) {
+          throw new Error("Failed to fetch Gmail messages");
+        }
+
+        const gmailData = await gmailResponse.json();
+
+        console.log("Gmail Messages:", gmailData);
+
+        if (gmailData.success) {
+          setMessages(gmailData.messages || []);
+        } else {
+          setMessages([]);
+        }
+
       } catch (error) {
-        console.error("Auth check failed:", error);
+        console.error("Dashboard error:", error);
+
+        localStorage.removeItem("access_token");
+        navigate("/", { replace: true });
+
       } finally {
-        setCheckingAuth(false);
+        setLoading(false);
       }
     };
-  
-    checkAuth();
+
+    loadDashboard();
   }, [navigate]);
+
+  // =========================================
+  // LOADING
+  // =========================================
+
   if (loading) {
     return (
       <div className="dashboard-loading">
         <div className="loading-spinner"></div>
-        <p>Loading dashboard...</p>
+        <p>Loading Gmail...</p>
       </div>
     );
   }
@@ -80,312 +133,338 @@ function Dashboard() {
     return null;
   }
 
+  // =========================================
+  // SEARCH
+  // =========================================
+
+  const filteredMessages = messages.filter((message) =>
+    message.name
+      ?.toLowerCase()
+      .includes(search.toLowerCase())
+  );
+
+  // =========================================
+  // DASHBOARD
+  // =========================================
+
   return (
-    <div className="dashboard">
+    <div className="gmail-dashboard">
 
-      {/* ================= SIDEBAR ================= */}
+      {/* =====================================
+          TOP HEADER
+      ===================================== */}
 
-      <aside className="sidebar">
+      <header className="gmail-header">
 
-        <div className="sidebar-brand">
-          <div className="brand-icon">🛡️</div>
-          <h2>MailGuard</h2>
-        </div>
+        <div className="gmail-logo-area">
 
-        <nav className="sidebar-nav">
-
-          <button className="nav-item active">
-            <span>📊</span>
-            Dashboard
+          <button className="menu-button">
+            ☰
           </button>
 
-          <button className="nav-item">
-            <span>📥</span>
-            Inbox
-          </button>
-
-          <button className="nav-item">
-            <span>🎣</span>
-            Phishing
-          </button>
-
-          <button className="nav-item">
-            <span>👥</span>
-            Social
-          </button>
-
-          <button className="nav-item">
-            <span>🌐</span>
-            IP Tracing
-          </button>
-
-          <button className="nav-item">
-            <span>🔍</span>
-            Email Analyzer
-          </button>
-
-        </nav>
-
-        <div className="sidebar-bottom">
-
-          <div className="user-mini">
-            {user.photo ? (
-              <img
-                src={user.photo}
-                alt={user.name}
-                className="user-avatar"
-              />
-            ) : (
-              <div className="user-avatar-placeholder">
-                {user.name?.charAt(0).toUpperCase()}
-              </div>
-            )}
-
-            <div className="user-mini-info">
-              <strong>{user.name}</strong>
-              <span>{user.email}</span>
-            </div>
+          <div className="gmail-logo">
+            <span className="gmail-m">M</span>
+            <span>Gmail</span>
           </div>
 
         </div>
 
-      </aside>
+        {/* Search */}
 
-      {/* ================= MAIN CONTENT ================= */}
+        <div className="gmail-search">
 
-      <main className="dashboard-main">
+          <span className="search-icon">
+            🔍
+          </span>
 
-        {/* Header */}
+          <input
+            type="text"
+            placeholder="Search mail"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
 
-        <header className="dashboard-header">
+          <span className="search-filter">
+            ☷
+          </span>
 
-          <div>
-            <h1>Dashboard</h1>
-            <p>Monitor and analyze your email security.</p>
-          </div>
+        </div>
 
-          <div className="profile">
+        {/* Header actions */}
 
+        <div className="gmail-header-actions">
+
+          <button title="Help">
+            ?
+          </button>
+
+          <button title="Settings">
+            ⚙
+          </button>
+
+          <button title="Google apps">
+            ⋮⋮
+          </button>
+
+          <div className="profile-circle">
             {user.photo ? (
               <img
                 src={user.photo}
                 alt={user.name}
-                className="profile-image"
               />
             ) : (
-              <div className="profile-placeholder">
-                {user.name?.charAt(0).toUpperCase()}
-              </div>
+              user.name?.charAt(0).toUpperCase()
             )}
+          </div>
 
-            <div>
-              <strong>{user.name}</strong>
-              <span>{user.email}</span>
+        </div>
+
+      </header>
+
+
+      {/* =====================================
+          BODY
+      ===================================== */}
+
+      <div className="gmail-body">
+
+        {/* =================================
+            SIDEBAR
+        ================================= */}
+
+        <aside className="gmail-sidebar">
+
+          <button
+            className="compose-button"
+            onClick={() => navigate("/analyzer")}
+          >
+            <span>✎</span>
+            Compose
+          </button>
+
+
+          <nav className="gmail-nav">
+
+            <button className="gmail-nav-item active">
+              <span>📥</span>
+              <strong>Inbox</strong>
+              <b>{messages.length}</b>
+            </button>
+
+            <button className="gmail-nav-item">
+              <span>☆</span>
+              Starred
+            </button>
+
+            <button className="gmail-nav-item">
+              <span>◷</span>
+              Snoozed
+            </button>
+
+            <button className="gmail-nav-item">
+              <span>➤</span>
+              Sent
+            </button>
+
+            <button className="gmail-nav-item">
+              <span>📝</span>
+              Drafts
+              <b>0</b>
+            </button>
+
+            <button className="gmail-nav-item">
+              <span>🛍</span>
+              Purchases
+              <b>0</b>
+            </button>
+
+            <button className="gmail-nav-item">
+              <span>⌄</span>
+              More
+            </button>
+
+          </nav>
+
+
+          <div className="labels-section">
+
+            <div className="labels-header">
+              <strong>Labels</strong>
+              <button>＋</button>
             </div>
 
           </div>
 
-        </header>
 
-        {/* Welcome */}
+          {/* MailGuard tools */}
 
-        <section className="welcome-card">
+          <div className="mailguard-section">
 
-          <div>
-            <p className="welcome-label">WELCOME BACK</p>
-
-            <h2>
-              Hello, {user.name?.split(" ")[0]} 👋
-            </h2>
-
-            <p>
-              Your email security dashboard is ready.
-              Analyze suspicious emails and protect your inbox.
-            </p>
-          </div>
-
-          <div className="welcome-icon">
-            🛡️
-          </div>
-
-        </section>
-
-        {/* Statistics */}
-
-        <section className="stats-grid">
-
-          <div className="stat-card">
-            <div className="stat-icon">📧</div>
-
-            <div>
-              <span>Total Emails</span>
-              <h3>0</h3>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon">🎣</div>
-
-            <div>
-              <span>Phishing Detected</span>
-              <h3>0</h3>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon">✅</div>
-
-            <div>
-              <span>Safe Emails</span>
-              <h3>0</h3>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <div className="stat-icon">🔍</div>
-
-            <div>
-              <span>Emails Analyzed</span>
-              <h3>0</h3>
-            </div>
-          </div>
-
-        </section>
-
-        {/* Main Cards */}
-
-        <section className="dashboard-grid">
-
-          {/* Gmail */}
-
-          <div className="dashboard-card gmail-card">
-
-            <div className="card-header">
-              <div>
-                <h3>Gmail</h3>
-                <p>Analyze emails directly from your Gmail account.</p>
-              </div>
-
-              <span className="status-badge">
-                ● Connected
-              </span>
-            </div>
-
-            <div className="card-content">
-
-              <div className="gmail-icon">
-                ✉️
-              </div>
-
-              <div>
-                <h4>Gmail Account Connected</h4>
-                <p>{user.email}</p>
-              </div>
-
+            <div className="mailguard-title">
+              MailGuard
             </div>
 
             <button
-              className="primary-button"
-              onClick={() => navigate("/inbox")}
+              onClick={() => navigate("/phishing")}
             >
-              Open Inbox →
+              🎣 Phishing
+            </button>
+
+            <button
+              onClick={() => navigate("/social")}
+            >
+              👥 Social Analysis
+            </button>
+
+            <button
+              onClick={() => navigate("/ip-tracing")}
+            >
+              🌐 IP Tracing
+            </button>
+
+            <button
+              onClick={() => navigate("/analyzer")}
+            >
+              🔍 Email Analyzer
             </button>
 
           </div>
 
-          {/* Upload */}
+        </aside>
 
-          <div className="dashboard-card">
 
-            <div className="card-header">
-              <div>
-                <h3>Analyze Email</h3>
-                <p>Upload an .eml file for security analysis.</p>
-              </div>
+        {/* =================================
+            MAIN EMAIL AREA
+        ================================= */}
 
-              <span className="analyzer-icon">
-                🔬
-              </span>
+        <main className="gmail-main">
+
+          {/* Toolbar */}
+
+          <div className="gmail-toolbar">
+
+            <div className="toolbar-left">
+
+              <button>
+                □
+              </button>
+
+              <button>
+                ↻
+              </button>
+
+              <button>
+                ⋮
+              </button>
+
             </div>
 
-            <div className="upload-box">
+            <div className="toolbar-right">
 
-              <div className="upload-icon">
-                📄
-              </div>
+              <span>
+                1–{filteredMessages.length} of{" "}
+                {messages.length}
+              </span>
 
-              <h4>Upload .eml file</h4>
+              <button>
+                ‹
+              </button>
 
-              <p>
-                Analyze headers, links, sender information
-                and phishing indicators.
-              </p>
-
-              <button
-                className="secondary-button"
-                onClick={() => navigate("/analyzer")}
-              >
-                Open Analyzer
+              <button>
+                ›
               </button>
 
             </div>
 
           </div>
 
-        </section>
 
-        {/* Security Tools */}
+          {/* =================================
+              EMAIL LIST
+          ================================= */}
 
-        <section className="tools-section">
+          <div className="email-list">
 
-          <div className="section-title">
-            <h2>Security Tools</h2>
-            <p>Quick access to MailGuard security features.</p>
+            {filteredMessages.length === 0 ? (
+
+              <div className="empty-inbox">
+                <div>📭</div>
+                <h3>No emails found</h3>
+                <p>
+                  Your Gmail inbox doesn't contain
+                  matching messages.
+                </p>
+              </div>
+
+            ) : (
+
+              filteredMessages.map((message) => (
+
+                <div
+                  className="email-row"
+                  key={message.message_id}
+                  onClick={() => {
+
+                    console.log(
+                      "Selected Gmail message:",
+                      message.message_id
+                    );
+
+                    // Later:
+                    // navigate(`/email/${message.message_id}`);
+                  }}
+                >
+
+                  {/* Checkbox */}
+
+                  <div className="email-checkbox">
+                    □
+                  </div>
+
+                  {/* Star */}
+
+                  <div className="email-star">
+                    ☆
+                  </div>
+
+                  {/* Sender */}
+
+                  <div className="email-sender">
+                    Gmail
+                  </div>
+
+                  {/* Subject */}
+
+                  <div className="email-content">
+
+                    <strong>
+                      {message.name}
+                    </strong>
+
+                    <span className="email-preview">
+                      — Click to open and analyze this
+                      email
+                    </span>
+
+                  </div>
+
+                  {/* Message ID */}
+
+                  <div className="email-id">
+                    {message.message_id}
+                  </div>
+
+                </div>
+
+              ))
+
+            )}
+
           </div>
 
-          <div className="tools-grid">
+        </main>
 
-            <button
-              className="tool-card"
-              onClick={() => navigate("/phishing")}
-            >
-              <span>🎣</span>
-              <div>
-                <h3>Phishing Detection</h3>
-                <p>Detect suspicious emails and malicious content.</p>
-              </div>
-              <b>→</b>
-            </button>
-
-            <button
-              className="tool-card"
-              onClick={() => navigate("/social")}
-            >
-              <span>👥</span>
-              <div>
-                <h3>Social Analysis</h3>
-                <p>Identify social engineering indicators.</p>
-              </div>
-              <b>→</b>
-            </button>
-
-            <button
-              className="tool-card"
-              onClick={() => navigate("/ip-tracing")}
-            >
-              <span>🌐</span>
-              <div>
-                <h3>IP Tracing</h3>
-                <p>Investigate sender IP addresses.</p>
-              </div>
-              <b>→</b>
-            </button>
-
-          </div>
-
-        </section>
-
-      </main>
+      </div>
 
     </div>
   );
