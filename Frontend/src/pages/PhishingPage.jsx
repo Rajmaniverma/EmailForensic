@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 
+const API_URL = "https://emailforensic.onrender.com";
+
 const PhishingPage = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -29,10 +31,11 @@ const PhishingPage = () => {
 
         console.log("Message ID:", messageId);
 
+        // IMPORTANT:
+        // Use the unified analysis endpoint.
+        // Backend checks cache first.
         const response = await fetch(
-          `https://emailforensic.onrender.com/gmail/Phising/${encodeURIComponent(
-            messageId
-          )}`,
+          `${API_URL}/gmail/full-analysis/${encodeURIComponent(messageId)}`,
           {
             method: "GET",
             headers: {
@@ -41,24 +44,38 @@ const PhishingPage = () => {
           }
         );
 
-        // Get response
-        const data  = await response.json();
+        const result = await response.json();
 
         console.log("Status:", response.status);
-        console.log("Phishing Data:", data);
+        console.log("Full Analysis:", result);
 
         // Backend error
         if (!response.ok) {
           throw new Error(
-            data?.detail || "Failed to fetch phishing analysis"
+            result?.detail || "Failed to fetch email analysis"
           );
         }
 
-        // Save data
-        setData(result);
+        if (!result.success || !result.data) {
+          throw new Error("Analysis data not found");
+        }
+
+        // -----------------------------------------
+        // Extract phishing result from unified cache
+        // -----------------------------------------
+        const phishingData = result.data.phishing;
+
+        if (!phishingData) {
+          throw new Error("Phishing analysis is not available");
+        }
+
+        console.log("Phishing Data:", phishingData);
+
+        setData(phishingData);
+
       } catch (error) {
         console.error("Phishing Error:", error);
-        setError(error.message);
+        setError(error.message || "Failed to load phishing analysis");
       } finally {
         setLoading(false);
       }
@@ -69,49 +86,136 @@ const PhishingPage = () => {
 
   // Loading
   if (loading) {
-    return <h1>Loading...</h1>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafd]">
+        <div className="text-center">
+          <div className="text-xl font-semibold text-[#202124]">
+            Loading Phishing Analysis...
+          </div>
+
+          <p className="mt-2 text-sm text-[#5f6368]">
+            Checking cached email analysis
+          </p>
+        </div>
+      </div>
+    );
   }
 
   // Error
   if (error) {
     return (
-      <div>
-        <h1>Error</h1>
-        <p>{error}</p>
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafd]">
+        <div className="p-6 rounded-xl bg-white border border-[#e5e7eb] shadow-sm">
+          <h1 className="text-xl font-semibold text-[#c5221f]">
+            Error
+          </h1>
+
+          <p className="mt-2 text-sm text-[#5f6368]">
+            {error}
+          </p>
+        </div>
       </div>
     );
   }
 
   // No data
   if (!data) {
-    return <h1>No data found</h1>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafd]">
+        <h1 className="text-xl font-semibold text-[#202124]">
+          No phishing analysis found
+        </h1>
+      </div>
+    );
   }
 
   return (
-    <div>
-      <h1>Phishing Detection</h1>
+    <div className="min-h-screen bg-[#f8fafd] p-6">
+      <div className="max-w-5xl mx-auto">
 
-      <h2>Phishing Score</h2>
-      <p>{data.phishing_score}%</p>
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-[#202124]">
+            Phishing Detection
+          </h1>
 
-      <h2>Legitimate Score</h2>
-      <p>{data.legitimate_score}%</p>
+          <p className="mt-1 text-sm text-[#5f6368]">
+            Detailed phishing analysis for this email
+          </p>
+        </div>
 
-      <h2>Prediction</h2>
-      <p>{data.prediction}</p>
+        {/* Scores */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
 
-      <h2>Explanation</h2>
-      <p>{data.explanation}</p>
+          {/* Phishing Score */}
+          <div className="bg-white rounded-xl border border-[#e5e7eb] p-5 shadow-sm">
+            <p className="text-sm text-[#5f6368]">
+              Phishing Score
+            </p>
 
-      <h2>Features</h2>
-      <pre>
-        {JSON.stringify(data.features, null, 2)}
-      </pre>
+            <p className="mt-2 text-3xl font-bold text-[#c5221f]">
+              {data.phishing_score ?? 0}%
+            </p>
+          </div>
 
-      <h2>AI Analysis</h2>
-      <pre>
-        {JSON.stringify(data.ai_analysis, null, 2)}
-      </pre>
+          {/* Legitimate Score */}
+          <div className="bg-white rounded-xl border border-[#e5e7eb] p-5 shadow-sm">
+            <p className="text-sm text-[#5f6368]">
+              Legitimate Score
+            </p>
+
+            <p className="mt-2 text-3xl font-bold text-[#1e7e5a]">
+              {data.legitimate_score ?? 0}%
+            </p>
+          </div>
+
+        </div>
+
+        {/* Prediction */}
+        <div className="bg-white rounded-xl border border-[#e5e7eb] p-5 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-[#202124]">
+            Prediction
+          </h2>
+
+          <p className="mt-3 text-lg font-medium text-[#1a73e8]">
+            {data.prediction || "Unknown"}
+          </p>
+        </div>
+
+        {/* Explanation */}
+        <div className="bg-white rounded-xl border border-[#e5e7eb] p-5 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-[#202124]">
+            Explanation
+          </h2>
+
+          <p className="mt-3 text-sm leading-6 text-[#5f6368]">
+            {data.explanation || "No explanation available."}
+          </p>
+        </div>
+
+        {/* Features */}
+        <div className="bg-white rounded-xl border border-[#e5e7eb] p-5 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-[#202124]">
+            Detection Features
+          </h2>
+
+          <pre className="mt-4 p-4 rounded-lg bg-[#f8f9fa] border border-[#e5e7eb] overflow-auto text-xs leading-5 text-[#202124]">
+            {JSON.stringify(data.features || {}, null, 2)}
+          </pre>
+        </div>
+
+        {/* AI Analysis */}
+        <div className="bg-white rounded-xl border border-[#e5e7eb] p-5 shadow-sm">
+          <h2 className="text-lg font-semibold text-[#202124]">
+            AI Analysis
+          </h2>
+
+          <pre className="mt-4 p-4 rounded-lg bg-[#f8f9fa] border border-[#e5e7eb] overflow-auto text-xs leading-5 text-[#202124]">
+            {JSON.stringify(data.ai_analysis || {}, null, 2)}
+          </pre>
+        </div>
+
+      </div>
     </div>
   );
 };

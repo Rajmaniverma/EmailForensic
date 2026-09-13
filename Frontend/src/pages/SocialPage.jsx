@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 
+const API_URL = "https://emailforensic.onrender.com";
+
 const SocialPage = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -29,10 +31,10 @@ const SocialPage = () => {
 
         console.log("Message ID:", messageId);
 
+        // Use the unified analysis endpoint.
+        // Backend checks cache first.
         const response = await fetch(
-          `https://emailforensic.onrender.com/gmail/Social/${encodeURIComponent(
-            messageId
-          )}`,
+          `${API_URL}/gmail/full-analysis/${encodeURIComponent(messageId)}`,
           {
             method: "GET",
             headers: {
@@ -44,19 +46,50 @@ const SocialPage = () => {
         const result = await response.json();
 
         console.log("Status:", response.status);
-        console.log("Social Data:", result);
+        console.log("Full Analysis:", result);
 
         // Backend error
         if (!response.ok) {
           throw new Error(
-            result?.detail || "Failed to fetch social engineering analysis"
+            result?.detail ||
+              "Failed to fetch email analysis"
           );
         }
 
-        setData(result);
+        if (!result.success || !result.data) {
+          throw new Error(
+            "Analysis data not found"
+          );
+        }
+
+        // Extract social engineering result
+        // from the combined analysis result.
+        const socialData = result.data.social;
+
+        if (!socialData) {
+          throw new Error(
+            "Social engineering analysis is not available"
+          );
+        }
+
+        console.log(
+          "Social Engineering Data:",
+          socialData
+        );
+
+        setData(socialData);
+
       } catch (error) {
-        console.error("Social Error:", error);
-        setError(error.message);
+        console.error(
+          "Social Error:",
+          error
+        );
+
+        setError(
+          error.message ||
+            "Failed to load social engineering analysis"
+        );
+
       } finally {
         setLoading(false);
       }
@@ -67,46 +100,135 @@ const SocialPage = () => {
 
   // Loading
   if (loading) {
-    return <h1>Loading...</h1>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafd]">
+        <div className="text-center">
+          <h1 className="text-xl font-semibold text-[#202124]">
+            Loading Social Engineering Analysis...
+          </h1>
+
+          <p className="mt-2 text-sm text-[#5f6368]">
+            Checking cached email analysis
+          </p>
+        </div>
+      </div>
+    );
   }
 
   // Error
   if (error) {
     return (
-      <div>
-        <h1>Error</h1>
-        <p>{error}</p>
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafd]">
+        <div className="w-full max-w-md p-6 bg-white rounded-xl border border-[#e5e7eb] shadow-sm">
+          <h1 className="text-xl font-semibold text-[#c5221f]">
+            Error
+          </h1>
+
+          <p className="mt-3 text-sm text-[#5f6368]">
+            {error}
+          </p>
+        </div>
       </div>
     );
   }
 
   // No data
   if (!data) {
-    return <h1>No data found</h1>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8fafd]">
+        <h1 className="text-xl font-semibold text-[#202124]">
+          No social engineering analysis found
+        </h1>
+      </div>
+    );
   }
 
   return (
-    <div>
-      <h1>Social Engineering Detection</h1>
+    <div className="min-h-screen bg-[#f8fafd] p-6">
+      <div className="max-w-5xl mx-auto">
 
-      <h2>Prediction</h2>
-      <p>{data.prediction}</p>
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-[#202124]">
+            Social Engineering Detection
+          </h1>
 
-      <h2>Score</h2>
-      <p>{data.score}%</p>
+          <p className="mt-1 text-sm text-[#5f6368]">
+            Detailed social engineering analysis
+            for this email
+          </p>
+        </div>
 
-      <h2>Explanation</h2>
-      <p>{data.explanation}</p>
+        {/* Prediction + Score */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
 
-      <h2>Features</h2>
-      <pre>
-        {JSON.stringify(data.features, null, 2)}
-      </pre>
+          {/* Prediction */}
+          <div className="bg-white rounded-xl border border-[#e5e7eb] p-5 shadow-sm">
+            <p className="text-sm text-[#5f6368]">
+              Prediction
+            </p>
 
-      <h2>AI Analysis</h2>
-      <pre>
-        {JSON.stringify(data.ai_analysis, null, 2)}
-      </pre>
+            <p className="mt-2 text-2xl font-bold text-[#1a73e8]">
+              {data.prediction || "Unknown"}
+            </p>
+          </div>
+
+          {/* Score */}
+          <div className="bg-white rounded-xl border border-[#e5e7eb] p-5 shadow-sm">
+            <p className="text-sm text-[#5f6368]">
+              Social Engineering Score
+            </p>
+
+            <p className="mt-2 text-3xl font-bold text-[#c5221f]">
+              {data.score ?? 0}%
+            </p>
+          </div>
+
+        </div>
+
+        {/* Explanation */}
+        <div className="bg-white rounded-xl border border-[#e5e7eb] p-5 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-[#202124]">
+            Explanation
+          </h2>
+
+          <p className="mt-3 text-sm leading-6 text-[#5f6368]">
+            {data.explanation ||
+              "No explanation available."}
+          </p>
+        </div>
+
+        {/* Features */}
+        <div className="bg-white rounded-xl border border-[#e5e7eb] p-5 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-[#202124]">
+            Detection Features
+          </h2>
+
+          <pre className="mt-4 p-4 rounded-lg bg-[#f8f9fa] border border-[#e5e7eb] overflow-auto text-xs leading-5 text-[#202124]">
+            {JSON.stringify(
+              data.features || {},
+              null,
+              2
+            )}
+          </pre>
+        </div>
+
+        {/* AI Analysis */}
+        <div className="bg-white rounded-xl border border-[#e5e7eb] p-5 shadow-sm">
+          <h2 className="text-lg font-semibold text-[#202124]">
+            AI Analysis
+          </h2>
+
+          <pre className="mt-4 p-4 rounded-lg bg-[#f8f9fa] border border-[#e5e7eb] overflow-auto text-xs leading-5 text-[#202124]">
+            {JSON.stringify(
+              data.ai_analysis || {},
+              null,
+              2
+            )}
+          </pre>
+        </div>
+
+      </div>
     </div>
   );
 };
