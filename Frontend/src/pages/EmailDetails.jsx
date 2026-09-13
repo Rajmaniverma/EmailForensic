@@ -44,13 +44,13 @@ const ANALYSIS_TOOLS = [
 function EmailDetail() {
   const { messageId } = useParams();
   const navigate = useNavigate();
-
+const [analysis, setAnalysis] = useState(null);
   const [email, setEmail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Per-tool analysis state
-  const [analysis, setAnalysis] = useState({});
+
 
   // =====================================================
   // TOKEN
@@ -120,26 +120,78 @@ function EmailDetail() {
   // RUN ANALYSIS
   // =====================================================
 
-  const runAnalysis = async (tool) => {
+const runAnalysis = async () => {
+  const token = getToken();
+
+  if (!token) {
+    navigate("/", { replace: true });
+    return;
+  }
+
+  if (!messageId) {
+    setError("No Gmail message ID was provided.");
+    return;
+  }
+
+  try {
+    setAnalysis((prev) => ({
+      ...(prev || {}),
+      loading: true,
+      error: null,
+    }));
+
+    const response = await fetch(
+      `${API_URL}/gmail/full-analysis/${encodeURIComponent(messageId)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        errorText || "Full analysis request failed"
+      );
+    }
+
+    const result = await response.json();
+
+    console.log("Full Analysis:", result);
+
+    if (!result.success || !result.data) {
+      throw new Error("Invalid analysis response");
+    }
+
+    setAnalysis({
+      ...result.data,
+      loading: false,
+      error: null,
+    });
+  } catch (err) {
+    console.error("Full analysis error:", err);
+
+    setAnalysis((prev) => ({
+      ...(prev || {}),
+      loading: false,
+      error: err.message || "Analysis failed.",
+    }));
+  }
+};
+
+useEffect(() => {
+  const fetchCachedAnalysis = async () => {
     const token = getToken();
 
-    if (!token) {
-      navigate("/", { replace: true });
+    if (!token || !messageId) {
       return;
     }
 
-    setAnalysis((prev) => ({
-      ...prev,
-      [tool.key]: {
-        loading: true,
-        result: prev[tool.key]?.result || null,
-        error: null,
-      },
-    }));
-
     try {
       const response = await fetch(
-        `${API_URL}${tool.path(messageId)}`,
+        `${API_URL}/gmail/cached-analysis/${encodeURIComponent(messageId)}`,
         {
           method: "GET",
           headers: {
@@ -149,34 +201,30 @@ function EmailDetail() {
       );
 
       if (!response.ok) {
-        throw new Error(`${tool.label} request failed`);
+        console.log("No cached analysis yet");
+        setAnalysis(null);
+        return;
       }
 
-      const data = await response.json();
+      const result = await response.json();
 
-      setAnalysis((prev) => ({
-        ...prev,
-        [tool.key]: {
-          loading: false,
-          result: data,
-          error: null,
-        },
-      }));
-    } catch (err) {
-      console.error(`${tool.label} error:`, err);
+      console.log("Cached Analysis:", result);
 
-      setAnalysis((prev) => ({
-        ...prev,
-        [tool.key]: {
-          loading: false,
-          result: null,
-          error: "Analysis failed.",
-        },
-      }));
+      if (result.success && result.data) {
+        setAnalysis(result.data);
+      } else {
+        setAnalysis(null);
+      }
+    } catch (error) {
+      console.error("Cache fetch error:", error);
+      setAnalysis(null);
     }
   };
 
-  // =====================================================
+  fetchCachedAnalysis();
+}, [messageId]);
+
+// =====================================================
   // LOADING
   // =====================================================
 
@@ -539,7 +587,7 @@ function EmailDetail() {
           {/* Compose */}
 
           <button
-            onClick={() => navigate("/analyzer")}
+            onClick={() => navigate(`/analyzer?message_id=${encodeURIComponent(messageId)}`)}
             className="
               w-fit
               min-w-[150px]
@@ -701,7 +749,7 @@ function EmailDetail() {
 
 
             <button
-              onClick={() => navigate("/phishing")}
+              onClick={() => navigate(`/phishing?message_id=${encodeURIComponent(messageId)}`)}
               className={securitySidebarClass}
             >
               🎣
@@ -709,7 +757,7 @@ function EmailDetail() {
             </button>
 
             <button
-              onClick={() => navigate("/social")}
+              onClick={() => navigate(`/social?message_id=${encodeURIComponent(messageId)}`)}
               className={securitySidebarClass}
             >
               👥
@@ -731,7 +779,7 @@ function EmailDetail() {
             </button>
 
             <button
-              onClick={() => navigate("/analyzer")}
+              onClick={() => navigate(`/analyzer?message_id=${encodeURIComponent(messageId)}`)}
               className={securitySidebarClass}
             >
               🔍
@@ -1514,10 +1562,55 @@ function EmailDetail() {
                 "
               >
 
+                {/* =========================================
+                    FULL ANALYSIS
+                ========================================== */}
+
+                <button
+                  onClick={runAnalysis}
+                  disabled={analysis?.loading}
+                  className="
+                    w-full
+                    px-4
+                    py-3
+                    rounded-xl
+                    bg-[#1a73e8]
+                    text-white
+                    text-sm
+                    font-medium
+                    hover:bg-[#1765cc]
+                    disabled:opacity-60
+                    disabled:cursor-not-allowed
+                    transition
+                  "
+                >
+                  {analysis?.loading
+                    ? "Analyzing email..."
+                    : analysis?.detection_engine ||
+                      analysis?.phishing ||
+                      analysis?.social ||
+                      analysis?.ip_tracing
+                    ? "Re-run Analysis"
+                    : "Analyze Email"}
+                </button>
+
+                {analysis?.loading && (
+                  <div className="flex items-center gap-2 text-xs text-[#5f6368]">
+                    <span className="w-2 h-2 rounded-full bg-[#1a73e8] animate-pulse" />
+                    Running all security checks...
+                  </div>
+                )}
+
                 {ANALYSIS_TOOLS.map((tool) => {
 
-                  const state =
-                    analysis[tool.key];
+                  const resultMap = {
+                    analyze: analysis?.detection_engine,
+                    phishing: analysis?.phishing,
+                    social: analysis?.social,
+                    ip: analysis?.ip_tracing,
+                  };
+
+                  const state = resultMap[tool.key];
 
                   return (
 
@@ -1600,7 +1693,7 @@ function EmailDetail() {
 
                       {/* Error */}
 
-                      {state?.error && (
+                      {analysis?.error && (
 
                         <div
                           className="
@@ -1614,7 +1707,7 @@ function EmailDetail() {
                             text-[#c5221f]
                           "
                         >
-                          {state.error}
+                          {analysis.error}
                         </div>
 
                       )}
@@ -1622,8 +1715,8 @@ function EmailDetail() {
 
                       {/* Result */}
 
-                      {state?.result &&
-                        !state.loading && (
+                      {state &&
+                        !analysis?.loading && (
 
                           <pre
                             className="
@@ -1644,7 +1737,7 @@ function EmailDetail() {
                             "
                           >
                             {JSON.stringify(
-                              state.result,
+                              state,
                               null,
                               2
                             )}
@@ -1658,79 +1751,6 @@ function EmailDetail() {
 
                 })}
 
-
-                {/* =========================================
-                    IP TRACING
-                ========================================== */}
-
-                <div>
-
-                  <div
-                    className="
-                      flex
-                      items-start
-                      gap-3
-                    "
-                  >
-
-                    <span className="text-xl">
-                      🌐
-                    </span>
-
-                    <div>
-
-                      <div
-                        className="
-                          text-sm
-                          font-medium
-                          text-[#202124]
-                        "
-                      >
-                        IP Tracing
-                      </div>
-
-                      <div
-                        className="
-                          mt-1
-                          text-xs
-                          leading-5
-                          text-[#5f6368]
-                        "
-                      >
-                        Trace originating IPs from this
-                        email's headers.
-                      </div>
-
-                    </div>
-
-                  </div>
-
-
-                  <button
-                    onClick={() =>
-                      navigate(
-                        `/ip-tracing?message_id=${encodeURIComponent(
-                          messageId
-                        )}`
-                      )
-                    }
-                    className="
-                      mt-3
-                      px-4
-                      py-2
-                      rounded-lg
-                      border
-                      border-[#1e7e5a]
-                      bg-[#e6f4ee]
-                      text-[#1e7e5a]
-                      text-xs
-                      font-medium
-                      hover:bg-[#d3ece0]
-                      cursor-pointer
-                    "
-                  >
-                    Trace IP
-                  </button>
 
                 </div>
 

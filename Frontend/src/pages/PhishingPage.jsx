@@ -42,15 +42,15 @@ const PhishingPage = () => {
         );
 
         // Get response
-        const result = await response.json();
+        const data  = await response.json();
 
         console.log("Status:", response.status);
-        console.log("Phishing Data:", result);
+        console.log("Phishing Data:", data);
 
         // Backend error
         if (!response.ok) {
           throw new Error(
-            result?.detail || "Failed to fetch phishing analysis"
+            data?.detail || "Failed to fetch phishing analysis"
           );
         }
 

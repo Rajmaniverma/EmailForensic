@@ -2,6 +2,7 @@ import json
 import os
 
 from jose import jwt
+from cachetools import TTLCache
 
 from typing import Optional
 
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-
+from IPGeolocation.IP_Geolocation import get_ip_intelligence
 from Database import get_db
 from DBmodel import GmailAccount, GmailMessage
 from Gmail_Auth import SCOPES
@@ -38,6 +39,10 @@ JWT_ALGORITHM = "HS256"
 # =========================================
 # GOOGLE SCOPES
 # =========================================
+analysis_cache = TTLCache(
+    maxsize=100,
+    ttl=1800
+)
 
 SCOPES = [
     "openid",
@@ -673,6 +678,284 @@ def get_email_by_message_id(
             status_code=500,
             detail=f"Failed to fetch email: {str(e)}"
         )
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+@router.get("/cached-analysis/{message_id}")
+def get_cached_analysis(
+    message_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+
+    # ==========================================
+    # GET ACCOUNT
+    # ==========================================
+
+    gmail, account = get_gmail_client(
+        request,
+        db
+    )
+
+    # ==========================================
+    # CACHE KEY
+    # ==========================================
+
+    cache_key = f"{account.id}:{message_id}"
+
+    # ==========================================
+    # CHECK CACHE
+    # ==========================================
+
+    cached_data = analysis_cache.get(cache_key)
+
+    if cached_data is None:
+
+        return {
+            "success": False,
+            "cached": False,
+            "message": "Analysis not found in cache"
+        }
+
+    # ==========================================
+    # RETURN CACHE
+    # ==========================================
+
+    return {
+
+        "success": True,
+
+        "cached": True,
+
+        "source": "cache",
+
+        "data": cached_data
+    }
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@router.get("/full-analysis/{message_id}")
+def full_analysis(
+    message_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+
+    # ==========================================
+    # 1. GET AUTHENTICATED GMAIL ACCOUNT
+    # ==========================================
+
+    gmail, account = get_gmail_client(request, db)
+
+    # ==========================================
+    # 2. CREATE CACHE KEY
+    # ==========================================
+
+    cache_key = f"{account.id}:{message_id}"
+
+    # ==========================================
+    # 3. CHECK CACHE FIRST
+    # ==========================================
+
+    cached_data = analysis_cache.get(cache_key)
+
+    if cached_data is not None:
+
+        print("===================================")
+        print("RETURNING DATA FROM CACHE")
+        print("CACHE KEY:", cache_key)
+        print("===================================")
+
+        return {
+            "success": True,
+            "source": "cache",
+            "data": cached_data
+        }
+
+    print("===================================")
+    print("NO CACHE FOUND")
+    print("RUNNING NEW ANALYSIS")
+    print("CACHE KEY:", cache_key)
+    print("===================================")
+
+    # ==========================================
+    # 4. FETCH GMAIL MESSAGE ONLY ONCE
+    # ==========================================
+
+    try:
+
+        gmail_msg = (
+            gmail.users()
+            .messages()
+            .get(
+                userId="me",
+                id=message_id,
+                format="full"
+            )
+            .execute()
+        )
+
+    except Exception as e:
+
+        print("Gmail fetch error:", e)
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch email: {str(e)}"
+        )
+
+    # ==========================================
+    # 5. PARSE EMAIL ONLY ONCE
+    # ==========================================
+
+    try:
+
+        gmail_parsed = parse_gmail_message(gmail_msg)
+
+        email_data = convert_gmail_to_email_data(
+            gmail_parsed,
+            gmail_msg
+        )
+
+    except Exception as e:
+
+        print("Email parsing error:", e)
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to parse email: {str(e)}"
+        )
+
+    # ==========================================
+    # 6. GENERAL DETECTION
+    # ==========================================
+
+    try:
+
+        detection = analyze_email(email_data)
+
+    except Exception as e:
+
+        print("Detection analysis error:", e)
+
+        detection = {
+            "error": str(e)
+        }
+
+    # ==========================================
+    # 7. PHISHING ANALYSIS
+    # ==========================================
+
+    try:
+
+        phishing = Phising_email(email_data)
+
+    except Exception as e:
+
+        print("Phishing analysis error:", e)
+
+        phishing = {
+            "error": str(e)
+        }
+
+    # ==========================================
+    # 8. SOCIAL ENGINEERING ANALYSIS
+    # ==========================================
+
+    try:
+
+        social = analyze_social_engineering(
+            email_data
+        )
+
+        # If Pydantic model
+        if hasattr(social, "model_dump"):
+            social = social.model_dump()
+
+    except Exception as e:
+
+        print("Social analysis error:", e)
+
+        social = {
+            "error": str(e)
+        }
+
+    # ==========================================
+    # 9. IP TRACING
+    # ==========================================
+
+    try:
+
+        origin_ip = email_data.get("origin_ip")
+
+        if origin_ip:
+
+            ip_data = get_ip_intelligence(
+                origin_ip
+            )
+
+        else:
+
+            ip_data = {
+                "message": "Origin IP not found"
+            }
+
+    except Exception as e:
+
+        print("IP tracing error:", e)
+
+        ip_data = {
+            "error": str(e)
+        }
+
+    # ==========================================
+    # 10. CREATE ONE COMPLETE RESULT
+    # ==========================================
+
+    result = {
+
+        "message_id": message_id,
+
+        # Original parsed email
+        "email": email_data,
+
+        # General detection
+        "detection_engine": detection,
+
+        # Phishing
+        "phishing": phishing,
+
+        # Social engineering
+        "social": social,
+
+        # IP tracing
+        "ip_tracing": ip_data
+    }
+
+    # ==========================================
+    # 11. SAVE COMPLETE RESULT IN CACHE
+    # ==========================================
+
+    analysis_cache[cache_key] = result
+
+    print("===================================")
+    print("ANALYSIS SAVED IN CACHE")
+    print("CACHE KEY:", cache_key)
+    print("===================================")
+
+    # ==========================================
+    # 12. RETURN COMPLETE RESULT
+    # ==========================================
+
+    return {
+
+        "success": True,
+
+        "source": "new_analysis",
+
+        "data": result
+    }
+# @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 @router.get("/analyze/{message_id}")
 def get_email_by_message_id(
     message_id: str,

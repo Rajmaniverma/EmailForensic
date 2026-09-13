@@ -187,7 +187,13 @@ function ScoreCircle({
             strokeLinecap="round"
             className={
               isThreat
-                ? "stroke-[#2563eb]"
+                ? numericScore >= 70
+                  ? "stroke-[#dc2626]"
+                  : numericScore >= 40
+                  ? "stroke-[#f59e0b]"
+                  : "stroke-[#2563eb]"
+                : numericScore >= 70
+                ? "stroke-[#16a34a]"
                 : "stroke-[#4f8fe8]"
             }
             style={{
@@ -369,15 +375,18 @@ export default function AnalyzerDashboard() {
   // FETCH ANALYSIS
   // ==========================================================
 
-  const fetchAnalysis = async () => {
+  // ==========================================================
+  // CACHE-FIRST ANALYSIS
+  // ==========================================================
+
+  const fetchCachedAnalysis = async () => {
     if (!messageId) {
       setError("Message ID is missing.");
       setLoading(false);
       return;
     }
 
-    const token =
-      localStorage.getItem("access_token");
+    const token = localStorage.getItem("access_token");
 
     if (!token) {
       setError("Authentication token is missing.");
@@ -390,9 +399,7 @@ export default function AnalyzerDashboard() {
       setError("");
 
       const response = await fetch(
-        `${API_URL}/gmail/analyze/${encodeURIComponent(
-          messageId
-        )}`,
+        `${API_URL}/gmail/cached-analysis/${encodeURIComponent(messageId)}`,
         {
           method: "GET",
           headers: {
@@ -403,45 +410,105 @@ export default function AnalyzerDashboard() {
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(
-          data?.detail ||
-            "Failed to fetch analyzer data."
-        );
+      console.log("Cached analysis response:", data);
+
+      // Cache miss is NOT an error.
+      if (!response.ok || !data.success || !data.data) {
+        setResult(null);
+        return false;
       }
 
-      if (!data.success) {
-        throw new Error(
-          "Email analysis was unsuccessful."
-        );
-      }
-
-      setResult(data);
-
+      setResult(data.data);
+      return true;
     } catch (err) {
-      console.error(err);
+      console.error("Cache fetch error:", err);
+      setResult(null);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // ==========================================================
+  // RUN COMPLETE ANALYSIS
+  // ==========================================================
+
+  const runFullAnalysis = async () => {
+    if (!messageId) {
+      setError("Message ID is missing.");
+      return;
+    }
+
+    const token = localStorage.getItem("access_token");
+
+    if (!token) {
+      setError("Authentication token is missing.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+
+      const response = await fetch(
+        `${API_URL}/gmail/full-analysis/${encodeURIComponent(messageId)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      console.log("Full analysis response:", data);
+
+      if (!response.ok || !data.success || !data.data) {
+        throw new Error(
+          data?.detail || "Failed to generate email analysis."
+        );
+      }
+
+      // /full-analysis returns the complete object.
+      // The backend also stores this object in TTLCache.
+      setResult(data.data);
+    } catch (err) {
+      console.error("Full analysis error:", err);
       setError(
-        err.message ||
-          "Unable to load email analysis."
+        err.message || "Unable to generate email analysis."
       );
     } finally {
       setLoading(false);
     }
   };
 
-
+  // Cache-first:
+  // 1. Open dashboard
+  // 2. Check temporary backend cache
+  // 3. If cache exists, display it immediately
+  // 4. If cache does not exist, stay on the dashboard and show Analyze button
   useEffect(() => {
-    fetchAnalysis();
+    fetchCachedAnalysis();
   }, [messageId]);
-
 
   // ==========================================================
   // DATA
   // ==========================================================
 
+  // Unified cache/full-analysis response:
+  // {
+  //   message_id,
+  //   email,
+  //   detection_engine,
+  //   phishing,
+  //   social,
+  //   ip_tracing
+  // }
   const detection =
-    result?.Detection_engine_data || {};
+    result?.detection_engine ||
+    result?.Detection_engine_data ||
+    {};
 
   const features =
     detection?.features || {};
@@ -450,7 +517,9 @@ export default function AnalyzerDashboard() {
     detection?.ai_analysis || {};
 
   const email =
-    result?.email_data || {};
+    result?.email ||
+    result?.email_data ||
+    {};
 
   const authentication =
     email?.authentication || {};
@@ -553,6 +622,19 @@ export default function AnalyzerDashboard() {
   };
 
 
+  const hasAnalysis = Boolean(
+    result?.detection_engine ||
+    result?.Detection_engine_data ||
+    result?.phishing ||
+    result?.social ||
+    result?.ip_tracing
+  );
+
+  const cacheSource =
+    result && hasAnalysis
+      ? "Temporary cache / current analysis"
+      : "No cached analysis";
+
   // ==========================================================
   // LOADING
   // ==========================================================
@@ -576,11 +658,11 @@ export default function AnalyzerDashboard() {
           </div>
 
           <h2 className="mt-5 text-sm font-semibold text-[#173b66]">
-            Analyzing Email
+            Loading Security Analysis
           </h2>
 
           <p className="mt-1 text-xs text-[#71839b]">
-            MailGuard is processing the forensic data...
+            Checking the temporary analysis cache...
           </p>
 
         </div>
@@ -622,7 +704,7 @@ export default function AnalyzerDashboard() {
             </button>
 
             <button
-              onClick={fetchAnalysis}
+              onClick={fetchCachedAnalysis}
               className="px-4 py-2.5 rounded-lg bg-[#2563eb] text-white text-sm font-medium hover:bg-[#1d4ed8]"
             >
               Try Again
@@ -705,7 +787,7 @@ export default function AnalyzerDashboard() {
             </div>
 
             <button
-              onClick={fetchAnalysis}
+              onClick={fetchCachedAnalysis}
               className="
                 px-3
                 py-2
@@ -720,7 +802,7 @@ export default function AnalyzerDashboard() {
                 cursor-pointer
               "
             >
-              ↻ Refresh
+              ↻ Refresh Cache
             </button>
 
           </div>
@@ -774,6 +856,83 @@ export default function AnalyzerDashboard() {
                 results.
               </p>
 
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] font-semibold ${
+                    hasAnalysis
+                      ? "bg-[#edf8f1] border-[#cce8d5] text-[#188038]"
+                      : "bg-[#fff8e1] border-[#f3df9b] text-[#9a6700]"
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      hasAnalysis
+                        ? "bg-[#16a34a]"
+                        : "bg-[#f59e0b]"
+                    }`}
+                  />
+                  {hasAnalysis ? "Analysis Available" : "Analysis Not Cached"}
+                </div>
+
+                <span className="text-[11px] text-[#7b8da6]">
+                  {cacheSource}
+                </span>
+
+                {!hasAnalysis && (
+                  <button
+                    onClick={runFullAnalysis}
+                    disabled={loading}
+                    className="
+                      inline-flex
+                      items-center
+                      gap-2
+                      px-4
+                      py-2
+                      rounded-lg
+                      bg-[#2563eb]
+                      text-white
+                      text-xs
+                      font-semibold
+                      shadow-sm
+                      hover:bg-[#1d4ed8]
+                      hover:shadow-md
+                      disabled:opacity-60
+                      disabled:cursor-not-allowed
+                      transition
+                    "
+                  >
+                    {loading ? "Analyzing..." : "Analyze Email"}
+                  </button>
+                )}
+
+                {hasAnalysis && (
+                  <button
+                    onClick={runFullAnalysis}
+                    disabled={loading}
+                    className="
+                      inline-flex
+                      items-center
+                      gap-2
+                      px-4
+                      py-2
+                      rounded-lg
+                      bg-[#e8f1ff]
+                      border
+                      border-[#c7dbf5]
+                      text-[#2563eb]
+                      text-xs
+                      font-semibold
+                      hover:bg-[#dbe9fc]
+                      disabled:opacity-60
+                      disabled:cursor-not-allowed
+                      transition
+                    "
+                  >
+                    {loading ? "Running..." : "Re-run Analysis"}
+                  </button>
+                )}
+              </div>
+
             </div>
 
           </div>
@@ -784,6 +943,100 @@ export default function AnalyzerDashboard() {
         {/* ====================================================
             RISK OVERVIEW
         ===================================================== */}
+
+        {/* ====================================================
+            CACHE STATUS
+        ===================================================== */}
+
+        <SectionCard className="mb-6 overflow-hidden">
+          <div className="p-5">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg ${
+                    hasAnalysis
+                      ? "bg-[#eaf7ef] text-[#188038]"
+                      : "bg-[#fff4d6] text-[#9a6700]"
+                  }`}
+                >
+                  {hasAnalysis ? "✓" : "⏳"}
+                </div>
+
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-semibold text-[#7b8da6]">
+                    Temporary Analysis Cache
+                  </p>
+                  <h3 className="mt-1 text-sm font-semibold text-[#173b66]">
+                    {hasAnalysis
+                      ? "Cached analysis is available"
+                      : "This email has not been analyzed yet"}
+                  </h3>
+                  <p className="mt-1 text-xs leading-5 text-[#6b7c93]">
+                    {hasAnalysis
+                      ? "The dashboard is displaying the combined forensic result from the backend cache."
+                      : "Run the complete analysis once. The backend will store the combined result temporarily for faster access."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`px-3 py-1.5 rounded-full border text-[11px] font-semibold ${
+                    hasAnalysis
+                      ? "bg-[#edf8f1] border-[#cce8d5] text-[#188038]"
+                      : "bg-[#fff8e1] border-[#f3df9b] text-[#9a6700]"
+                  }`}
+                >
+                  {hasAnalysis ? "CACHE HIT" : "CACHE MISS"}
+                </span>
+
+                <button
+                  onClick={fetchCachedAnalysis}
+                  disabled={loading}
+                  className="
+                    px-3.5
+                    py-2
+                    rounded-lg
+                    border
+                    border-[#d4e1ef]
+                    bg-white
+                    text-xs
+                    font-semibold
+                    text-[#2563eb]
+                    hover:bg-[#f3f7fc]
+                    disabled:opacity-60
+                    disabled:cursor-not-allowed
+                    transition
+                  "
+                >
+                  Check Cache
+                </button>
+
+                {!hasAnalysis && (
+                  <button
+                    onClick={runFullAnalysis}
+                    disabled={loading}
+                    className="
+                      px-3.5
+                      py-2
+                      rounded-lg
+                      bg-[#2563eb]
+                      text-white
+                      text-xs
+                      font-semibold
+                      hover:bg-[#1d4ed8]
+                      disabled:opacity-60
+                      disabled:cursor-not-allowed
+                      transition
+                    "
+                  >
+                    Analyze Now
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </SectionCard>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-6">
 
@@ -853,6 +1106,64 @@ export default function AnalyzerDashboard() {
 
           </SectionCard>
 
+        </div>
+
+        {/* ====================================================
+            SECURITY MODULE SUMMARY
+        ===================================================== */}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          {[
+            {
+              icon: "🎣",
+              title: "Phishing",
+              value: result?.phishing,
+              label: "Phishing detection result",
+              accent: "bg-[#fff0ef] text-[#c5221f] border-[#f4cbc8]",
+            },
+            {
+              icon: "👥",
+              title: "Social Engineering",
+              value: result?.social,
+              label: "Social engineering result",
+              accent: "bg-[#f4efff] text-[#7c3aed] border-[#ddd0fa]",
+            },
+            {
+              icon: "🌐",
+              title: "IP Intelligence",
+              value: result?.ip_tracing,
+              label: "Origin IP intelligence",
+              accent: "bg-[#edf4ff] text-[#2563eb] border-[#d3e3f7]",
+            },
+          ].map((item) => (
+            <div
+              key={item.title}
+              className={`rounded-2xl border p-4 bg-white shadow-sm ${item.accent}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/80 border border-current/10 flex items-center justify-center text-lg">
+                  {item.icon}
+                </div>
+
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold">
+                    {item.title}
+                  </h3>
+                  <p className="mt-0.5 text-[11px] opacity-70">
+                    {item.label}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-lg bg-white/70 border border-current/10 px-3 py-2">
+                <p className="text-[11px] font-mono break-all opacity-80">
+                  {item.value
+                    ? "Data available in unified analysis"
+                    : "Not analyzed yet"}
+                </p>
+              </div>
+            </div>
+          ))}
         </div>
 
 
@@ -1406,8 +1717,8 @@ export default function AnalyzerDashboard() {
           </h2>
 
           <p className="mt-1 text-xs leading-5 text-[#6b7c93]">
-            Investigate this email further using MailGuard's
-            specialized security analysis tools.
+            Investigate this email further using the same
+            temporary cached analysis data.
           </p>
 
         </div>
