@@ -834,7 +834,8 @@ useEffect(() => {
             min-w-0
             flex
             flex-col
-            overflow-hidden
+            overflow-hidden 
+
           "
         >
 
@@ -844,7 +845,7 @@ useEffect(() => {
 
           <div
             className="
-              h-[56px]
+              h-14
               min-h-[56px]
               flex
               items-center
