@@ -172,6 +172,16 @@ export default function AnalyzerDashboard() {
     0
   );
 
+  // The backend response contains urgency/pressure inside ai_analysis.body.
+  // Calculate this BEFORE overallRisk uses it.
+  const urgency =
+    Boolean(ai?.body?.urgency) ||
+    Boolean(ai?.body?.pressure) ||
+    Boolean(ai?.body_analysis?.urgency) ||
+    Boolean(ai?.body_analysis?.pressure) ||
+    Boolean(ai?.subject_analysis?.urgency) ||
+    Number(features?.urgent_count ?? 0) > 0;
+
   const riskLevel = String(
     ai?.risk_level ||
     detection?.risk_level ||
@@ -222,7 +232,9 @@ export default function AnalyzerDashboard() {
   };
 
   const authPassed =
-    [auth.spf, auth.dkim, auth.dmarc].filter(Boolean).length;
+    [auth.spf, auth.dkim, auth.dmarc].filter(
+      (value) => String(value).toLowerCase() === "pass"
+    ).length;
 
   const urlCount = Number(
     features?.url_count ??
@@ -249,12 +261,6 @@ export default function AnalyzerDashboard() {
   const credentialCount = Number(
     features?.credential_count ?? 0
   );
-
-  const urgency =
-    Boolean(ai?.body_analysis?.urgency) ||
-    Boolean(ai?.subject_analysis?.urgency) ||
-    Boolean(ai?.body?.urgency) ||
-    Number(features?.urgent_count ?? 0) > 0;
 
   const ipAddress = ip?.ip || email?.origin_ip || "Not available";
   const country = ip?.country || email?.geolocation?.country || "Not available";
@@ -753,11 +759,25 @@ function PageHeader({ navigate, onAnalyze, analyzing, progress }) {
 function ScoreRing({ value }) {
   const safeValue = Math.min(100, Math.max(0, Number(value) || 0));
 
+  const ringColor =
+    safeValue >= 70
+      ? "#d93025"
+      : safeValue >= 40
+      ? "#f9ab00"
+      : "#1e8e3e";
+
+  const ringTrack =
+    safeValue >= 70
+      ? "#f5d2cf"
+      : safeValue >= 40
+      ? "#f7e4b7"
+      : "#dcebe2";
+
   return (
     <div
       className="relative w-28 h-28 rounded-full flex items-center justify-center shrink-0"
       style={{
-        background: `conic-gradient(#1e8e3e ${safeValue * 3.6}deg, #dcebe2 0deg)`,
+        background: `conic-gradient(${ringColor} ${safeValue * 3.6}deg, ${ringTrack} 0deg)`,
       }}
     >
       <div className="w-20 h-20 rounded-full bg-white flex flex-col items-center justify-center">
