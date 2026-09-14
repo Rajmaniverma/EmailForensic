@@ -2,7 +2,6 @@
 import os
 import secrets
 from typing import Optional
-import os
 from fastapi import Header
 from fastapi import FastAPI, HTTPException, Request
 from google_auth_oauthlib.flow import Flow
@@ -26,16 +25,12 @@ from sqlalchemy.orm import Session
 from googleapiclient.discovery import build
 from fastapi import Depends
 from sqlalchemy.orm import Session
-
 from Database import get_db
 from DBmodel import  GmailAccount
-
 from Database import engine, Base
-
-
 from jose import jwt
 from datetime import datetime, timedelta
-
+from routes.Gmail import router as gmail_router
 JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = "HS256"
 # import DBmodel
@@ -46,17 +41,11 @@ JWT_ALGORITHM = "HS256"
 # ============================================================
 # Routes
 
-app = FastAPI(
-    title="Gmail Email Analyzer",
-    version="1.0.0"
-)
-
+app = FastAPI( title="Gmail Email Analyzer", version="1.0.0")
 # ============================================================
 # CORS CONFIGURATION
 # ============================================================
-
-app.add_middleware(
-    CORSMiddleware,
+app.add_middleware( CORSMiddleware,
     allow_origins=[
         "https://email-forensic.vercel.app",
         "http://localhost:5173",
@@ -76,66 +65,18 @@ app.add_middleware(
     same_site="none",
     https_only=True,
 )
-# ============================================================
-# OAUTH CONFIGURATION
-# ============================================================
-
-# For local development only.
-# Remove/disable this in production.
-
-
-# app.include_router(Login_router, prefix="/login")
-# ============================================================
-# REQUEST MODEL
-# ============================================================
 
 class GmailAnalyzeRequest(BaseModel):
     message_id: str
 
-from routes.Gmail import router as gmail_router
 
-app.include_router(
-    gmail_router,
-    prefix="/gmail",
-    tags=["Gmail"]
-)
+
+app.include_router( gmail_router, prefix="/gmail", tags=["Gmail"])
 # ============================================================
 # ROOT
 # ============================================================
 
-@app.post("/upload")
-async def upload_eml(file: UploadFile = File(...)):
 
-    if not file.filename.lower().endswith(".eml"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only .eml files are supported"
-        )
-
-    content = await file.read()
-
-    try:
-        email_data = parse_email(content)
-        analysis = analyze_email(email_data)
-        phishing = Phising_email(email_data)
-        
-        return {
-            "filename": file.filename,
-            "content_type": file.content_type,
-            "message": "EML file received successfully",
-            "size": len(content),
-            "Data": email_data,
-            "analysis": analysis,
-            "phishing": phishing
-        }
-
-    except Exception as e:
-        print("ERROR:", repr(e))
-
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
 def create_access_token(account_id: int):
     expire = datetime.utcnow() + timedelta(days=7)
 
@@ -161,8 +102,7 @@ def auth_status(
     if not authorization:
         return {
             "authenticated": False
-        }
-
+    }
     if not authorization.startswith("Bearer "):
         return {
             "authenticated": False
@@ -487,14 +427,7 @@ def google_callback(request: Request , db: Session = Depends(get_db)):
         gmail_name = user_info.get("name")
         gmail_photo = user_info.get("picture")
 
-        # with open(
-        #     TOKEN_FILE,
-        #     "w"
-        # ) as token_file:
 
-        #     token_file.write(
-        #         credentials.to_json()
-        #     )
         google_token = credentials.to_json()
 
         account = db.query(GmailAccount).filter(
@@ -576,49 +509,5 @@ def google_callback(request: Request , db: Session = Depends(get_db)):
             "You can now analyze Gmail emails."
         )
     }
-# ============================================================
-# GET CURRENT EMAIL USING MESSAGE ID
-# ============================================================
 
-@app.get("/gmail/test/{message_id}")
-def test_gmail_message(message_id: str):
-
-    print("\n" + "=" * 60)
-    print("GMAIL MESSAGE TEST")
-    print("=" * 60)
-
-    print(f"[1] Received ID: {message_id}")
-
-    try:
-        client = GmailClient()
-
-        print("[2] GmailClient created")
-
-        email_data = client.get_message(message_id)
-
-        print("[3] Gmail API message found")
-        print("=" * 60)
-
-        return {
-            "success": True,
-            "message_id": message_id,
-            "data": email_data
-        }
-
-    except Exception as exc:
-
-        print("[ERROR] Gmail API request failed")
-        print(f"[ERROR TYPE] {type(exc).__name__}")
-        print(f"[ERROR DETAILS] {exc}")
-
-        raise HTTPException(
-            status_code=500,
-            detail=str(exc)
-        )
-
-@app.get("/health")
-def health():
-    return {
-        "status": "healthy"
-    }
 

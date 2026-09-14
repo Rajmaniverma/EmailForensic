@@ -1,9 +1,12 @@
 import json
 import os
-
+from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.orm import Session
 from jose import jwt
 from cachetools import TTLCache
-
+from sqlalchemy.dialects.mysql import insert
 from typing import Optional
 
 from fastapi import APIRouter, Request, Depends, HTTPException
@@ -63,6 +66,9 @@ SCOPES = [
 # SAVE ONE MESSAGE MANUALLY
 # =========================================
 
+from sqlalchemy.dialects.mysql import insert
+
+
 @router.post("/message")
 def save_message(
     message_id: str,
@@ -71,15 +77,17 @@ def save_message(
     db: Session = Depends(get_db)
 ):
 
-    account_id = request.session.get(
-        "gmail_account_id"
-    )
+    account_id = request.session.get("gmail_account_id")
 
     if not account_id:
         raise HTTPException(
             status_code=401,
             detail="Gmail account not connected"
         )
+
+    # -------------------------------------
+    # Verify Gmail account
+    # -------------------------------------
 
     account = db.query(GmailAccount).filter(
         GmailAccount.id == account_id
@@ -92,48 +100,27 @@ def save_message(
         )
 
     # -------------------------------------
-    # Check if message already exists
+    # INSERT or UPDATE message
     # -------------------------------------
 
-    existing = db.query(GmailMessage).filter(
-        GmailMessage.gmail_account_id == account.id,
-        GmailMessage.message_id == message_id
-    ).first()
-
-    if existing:
-
-        existing.name = name
-
-        db.commit()
-        db.refresh(existing)
-
-        return {
-            "message": "Gmail message updated",
-            "message_id": existing.message_id,
-            "name": existing.name
-        }
-
-    # -------------------------------------
-    # Create new message
-    # -------------------------------------
-
-    message = GmailMessage(
+    stmt = insert(GmailMessage).values(
         gmail_account_id=account.id,
         message_id=message_id,
         name=name
     )
 
-    db.add(message)
+    stmt = stmt.on_duplicate_key_update(
+        name=stmt.inserted.name
+    )
+
+    db.execute(stmt)
     db.commit()
-    db.refresh(message)
 
     return {
-        "message": "Gmail message saved",
-        "message_id": message.message_id,
-        "name": message.name
+        "message": "Gmail message saved/updated",
+        "message_id": message_id,
+        "name": name
     }
-
-
 # =========================================
 # SYNC LATEST 100 GMAIL MESSAGES
 # =========================================
@@ -329,18 +316,18 @@ def get_messages(
     db: Session = Depends(get_db)
 ):
 
-    # --------------------------------------------
-    # Get Gmail client
-    # --------------------------------------------
+    # ========================================================
+    # 1. GET GMAIL CLIENT
+    # ========================================================
 
     gmail, account = get_gmail_client(
         request,
         db
     )
 
-    # --------------------------------------------
-    # Gmail API parameters
-    # --------------------------------------------
+    # ========================================================
+    # 2. GMAIL LIST PARAMETERS
+    # ========================================================
 
     params = {
         "userId": "me",
@@ -348,17 +335,12 @@ def get_messages(
         "q": "in:inbox"
     }
 
-    # --------------------------------------------
-    # If Next button sent a token
-    # --------------------------------------------
-
     if page_token:
-
         params["pageToken"] = page_token
 
-    # --------------------------------------------
-    # Get 10 messages
-    # --------------------------------------------
+    # ========================================================
+    # 3. GET MESSAGE IDS
+    # ========================================================
 
     try:
 
@@ -376,50 +358,48 @@ def get_messages(
             detail=f"Failed to fetch Gmail messages: {str(e)}"
         )
 
-    messages = result.get(
-        "messages",
-        []
-    )
+    messages = result.get("messages", [])
 
     response_messages = []
 
     # ========================================================
-    # GET SUBJECT FOR ONLY THESE 10 EMAILS
+    # 4. IF NO MESSAGES
     # ========================================================
 
-    for msg in messages:
+    if not messages:
 
-        message_id = msg["id"]
-
-        try:
-
-            email = (
-                gmail.users()
-                .messages()
-                .get(
-                    userId="me",
-                    id=message_id,
-                    format="metadata",
-                    metadataHeaders=["Subject"]
-                )
-                .execute()
+        return {
+            "success": True,
+            "messages": [],
+            "next_page_token": result.get("nextPageToken"),
+            "has_next": bool(
+                result.get("nextPageToken")
             )
+        }
 
-        except Exception as e:
+    # ========================================================
+    # 5. CREATE BATCH REQUEST
+    # ========================================================
+
+    batch = gmail.new_batch_http_request()
+
+    def process_message(request_id, response, exception):
+
+        if exception:
 
             print(
-                f"Failed to fetch message "
-                f"{message_id}: {e}"
+                f"Failed to fetch Gmail message "
+                f"{request_id}: {exception}"
             )
 
-            continue
+            return
 
         # --------------------------------------------
-        # Extract subject
+        # Extract payload
         # --------------------------------------------
 
         headers = (
-            email
+            response
             .get("payload", {})
             .get("headers", [])
         )
@@ -428,19 +408,58 @@ def get_messages(
 
         for header in headers:
 
-            if header["name"].lower() == "subject":
+            if header.get("name", "").lower() == "subject":
 
-                subject = header["value"]
+                subject = header.get(
+                    "value",
+                    "(No Subject)"
+                )
 
                 break
 
         response_messages.append({
-            "message_id": message_id,
+            "message_id": request_id,
             "name": subject
         })
 
     # ========================================================
-    # RETURN
+    # 6. ADD ALL MESSAGE REQUESTS TO BATCH
+    # ========================================================
+
+    for msg in messages:
+
+        message_id = msg["id"]
+
+        batch.add(
+            gmail.users()
+            .messages()
+            .get(
+                userId="me",
+                id=message_id,
+                format="metadata",
+                metadataHeaders=["Subject"]
+            ),
+            callback=process_message,
+            request_id=message_id
+        )
+
+    # ========================================================
+    # 7. EXECUTE BATCH
+    # ========================================================
+
+    try:
+
+        batch.execute()
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch Gmail message metadata: {str(e)}"
+        )
+
+    # ========================================================
+    # 8. RETURN EXACT SAME OUTPUT
     # ========================================================
 
     return {
@@ -448,12 +467,10 @@ def get_messages(
 
         "messages": response_messages,
 
-        # Frontend stores this for Next
         "next_page_token": result.get(
             "nextPageToken"
         ),
 
-        # If false → disable Next button
         "has_next": bool(
             result.get("nextPageToken")
         )
@@ -461,174 +478,6 @@ def get_messages(
 
 
 
-
-@router.get("/sync-messages")
-def sync_messages(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-
-    # -------------------------------------
-    # Get Gmail client
-    # -------------------------------------
-
-    gmail, account = get_gmail_client(
-        request,
-        db
-    )
-
-    # -------------------------------------
-    # Get latest 100 inbox messages
-    # -------------------------------------
-
-    try:
-
-        result = gmail.users().messages().list(
-            userId="me",
-            maxResults=10,
-            q="in:inbox"
-        ).execute()
-
-    except Exception as e:
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch Gmail messages: {str(e)}"
-        )
-
-    messages = result.get(
-        "messages",
-        []
-    )
-
-    saved_messages = []
-
-    # =====================================
-    # PROCESS EACH MESSAGE
-    # =====================================
-
-    for msg in messages:
-
-        message_id = msg["id"]
-
-        # ---------------------------------
-        # Get only Subject header
-        # ---------------------------------
-
-        try:
-
-            email = gmail.users().messages().get(
-                userId="me",
-                id=message_id,
-                format="metadata",
-                metadataHeaders=["Subject"]
-            ).execute()
-
-        except Exception as e:
-
-            print(
-                f"Failed to fetch message {message_id}: {e}"
-            )
-
-            continue
-
-        # ---------------------------------
-        # Extract headers
-        # ---------------------------------
-
-        headers = email.get(
-            "payload",
-            {}
-        ).get(
-            "headers",
-            []
-        )
-
-        subject = None
-
-        for header in headers:
-
-            if header["name"].lower() == "subject":
-
-                subject = header["value"]
-
-                break
-
-        # ---------------------------------
-        # Handle emails without subject
-        # ---------------------------------
-
-        if not subject:
-            subject = "(No Subject)"
-
-        # ---------------------------------
-        # Check if message already exists
-        # ---------------------------------
-
-        existing = db.query(
-            GmailMessage
-        ).filter(
-            GmailMessage.gmail_account_id == account.id,
-            GmailMessage.message_id == message_id
-        ).first()
-
-        # ---------------------------------
-        # Update existing message
-        # ---------------------------------
-
-        if existing:
-
-            existing.name = subject
-
-        # ---------------------------------
-        # Create new message
-        # ---------------------------------
-
-        else:
-
-            new_message = GmailMessage(
-                gmail_account_id=account.id,
-                message_id=message_id,
-                name=subject
-            )
-
-            db.add(new_message)
-
-        # ---------------------------------
-        # Add to response
-        # ---------------------------------
-
-        saved_messages.append({
-            "message_id": message_id,
-            "name": subject
-        })
-
-    # =====================================
-    # COMMIT DATABASE
-    # =====================================
-
-    try:
-
-        db.commit()
-
-    except Exception as e:
-
-        db.rollback()
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to save messages: {str(e)}"
-        )
-
-    # =====================================
-    # RESPONSE
-    # =====================================
-
-    return {
-        "message": "Gmail messages synced successfully",
-        "count": len(saved_messages),
-        "messages": saved_messages
-    }
 
 
 
@@ -737,50 +586,26 @@ def full_analysis(
     request: Request,
     db: Session = Depends(get_db)
 ):
-
-    # ==========================================
-    # 1. GET AUTHENTICATED GMAIL ACCOUNT
-    # ==========================================
-
     gmail, account = get_gmail_client(request, db)
-
-    # ==========================================
-    # 2. CREATE CACHE KEY
-    # ==========================================
 
     cache_key = f"{account.id}:{message_id}"
 
-    # ==========================================
-    # 3. CHECK CACHE FIRST
-    # ==========================================
-
+    # =========================
+    # CHECK CACHE
+    # =========================
     cached_data = analysis_cache.get(cache_key)
 
     if cached_data is not None:
-
-        print("===================================")
-        print("RETURNING DATA FROM CACHE")
-        print("CACHE KEY:", cache_key)
-        print("===================================")
-
         return {
             "success": True,
             "source": "cache",
             "data": cached_data
         }
 
-    print("===================================")
-    print("NO CACHE FOUND")
-    print("RUNNING NEW ANALYSIS")
-    print("CACHE KEY:", cache_key)
-    print("===================================")
-
-    # ==========================================
-    # 4. FETCH GMAIL MESSAGE ONLY ONCE
-    # ==========================================
-
+    # =========================
+    # FETCH EMAIL
+    # =========================
     try:
-
         gmail_msg = (
             gmail.users()
             .messages()
@@ -791,22 +616,16 @@ def full_analysis(
             )
             .execute()
         )
-
     except Exception as e:
-
-        print("Gmail fetch error:", e)
-
         raise HTTPException(
             status_code=500,
             detail=f"Failed to fetch email: {str(e)}"
         )
 
-    # ==========================================
-    # 5. PARSE EMAIL ONLY ONCE
-    # ==========================================
-
+    # =========================
+    # PARSE EMAIL
+    # =========================
     try:
-
         gmail_parsed = parse_gmail_message(gmail_msg)
 
         email_data = convert_gmail_to_email_data(
@@ -815,141 +634,91 @@ def full_analysis(
         )
 
     except Exception as e:
-
-        print("Email parsing error:", e)
-
         raise HTTPException(
             status_code=500,
             detail=f"Failed to parse email: {str(e)}"
         )
 
-    # ==========================================
-    # 6. GENERAL DETECTION
-    # ==========================================
+    # =====================================================
+    # RUN ALL 4 ANALYSES IN PARALLEL
+    # =====================================================
 
-    try:
+    def run_detection():
+        try:
+            return analyze_email(email_data)
+        except Exception as e:
+            return {"error": str(e)}
 
-        detection = analyze_email(email_data)
+    def run_phishing():
+        try:
+            return Phising_email(email_data)
+        except Exception as e:
+            return {"error": str(e)}
 
-    except Exception as e:
+    def run_social():
+        try:
+            social = analyze_social_engineering(email_data)
 
-        print("Detection analysis error:", e)
+            if hasattr(social, "model_dump"):
+                social = social.model_dump()
 
-        detection = {
-            "error": str(e)
-        }
+            return social
 
-    # ==========================================
-    # 7. PHISHING ANALYSIS
-    # ==========================================
+        except Exception as e:
+            return {"error": str(e)}
 
-    try:
+    def run_ip():
+        try:
+            origin_ip = email_data.get("origin_ip")
 
-        phishing = Phising_email(email_data)
+            if origin_ip:
+                return get_ip_intelligence(origin_ip)
 
-    except Exception as e:
-
-        print("Phishing analysis error:", e)
-
-        phishing = {
-            "error": str(e)
-        }
-
-    # ==========================================
-    # 8. SOCIAL ENGINEERING ANALYSIS
-    # ==========================================
-
-    try:
-
-        social = analyze_social_engineering(
-            email_data
-        )
-
-        # If Pydantic model
-        if hasattr(social, "model_dump"):
-            social = social.model_dump()
-
-    except Exception as e:
-
-        print("Social analysis error:", e)
-
-        social = {
-            "error": str(e)
-        }
-
-    # ==========================================
-    # 9. IP TRACING
-    # ==========================================
-
-    try:
-
-        origin_ip = email_data.get("origin_ip")
-
-        if origin_ip:
-
-            ip_data = get_ip_intelligence(
-                origin_ip
-            )
-
-        else:
-
-            ip_data = {
+            return {
                 "message": "Origin IP not found"
             }
 
-    except Exception as e:
+        except Exception as e:
+            return {"error": str(e)}
 
-        print("IP tracing error:", e)
+    # Run simultaneously
+    with ThreadPoolExecutor(max_workers=4) as executor:
 
-        ip_data = {
-            "error": str(e)
-        }
+        detection_future = executor.submit(run_detection)
+        phishing_future = executor.submit(run_phishing)
+        social_future = executor.submit(run_social)
+        ip_future = executor.submit(run_ip)
 
-    # ==========================================
-    # 10. CREATE ONE COMPLETE RESULT
-    # ==========================================
+        # Get results
+        detection = detection_future.result()
+        phishing = phishing_future.result()
+        social = social_future.result()
+        ip_data = ip_future.result()
+
+    # =====================================================
+    # SAME RESULT STRUCTURE AS BEFORE
+    # =====================================================
 
     result = {
-
         "message_id": message_id,
-
-        # Original parsed email
         "email": email_data,
-
-        # General detection
         "detection_engine": detection,
-
-        # Phishing
         "phishing": phishing,
-
-        # Social engineering
         "social": social,
-
-        # IP tracing
         "ip_tracing": ip_data
     }
 
-    # ==========================================
-    # 11. SAVE COMPLETE RESULT IN CACHE
-    # ==========================================
-
+    # =========================
+    # SAVE TO CACHE
+    # =========================
     analysis_cache[cache_key] = result
 
-    print("===================================")
-    print("ANALYSIS SAVED IN CACHE")
-    print("CACHE KEY:", cache_key)
-    print("===================================")
-
-    # ==========================================
-    # 12. RETURN COMPLETE RESULT
-    # ==========================================
-
+    # =========================
+    # SAME RESPONSE AS BEFORE
+    # =========================
     return {
-
         "success": True,
-
         "source": "new_analysis",
-
         "data": result
     }
 # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
