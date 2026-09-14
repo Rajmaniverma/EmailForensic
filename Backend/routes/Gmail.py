@@ -643,6 +643,7 @@ def full_analysis(
     # RUN ALL 4 ANALYSES IN PARALLEL
     # =====================================================
 
+
     def run_detection():
         try:
             return analyze_email(email_data)
@@ -683,13 +684,14 @@ def full_analysis(
 
     # Run simultaneously
     with ThreadPoolExecutor(max_workers=4) as executor:
-
+       
         detection_future = executor.submit(run_detection)
         phishing_future = executor.submit(run_phishing)
         social_future = executor.submit(run_social)
         ip_future = executor.submit(run_ip)
 
-        # Get results
+        
+
         detection = detection_future.result()
         phishing = phishing_future.result()
         social = social_future.result()
