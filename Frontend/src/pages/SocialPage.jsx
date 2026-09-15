@@ -157,7 +157,7 @@ const SocialPage = () => {
   // ==========================================
 
   const score = Number(
-    data.social_engineering_score ?? 0
+    data.social_engineering_score ?? 10
   );
 
   const techniques = Array.isArray(data.techniques)

@@ -18,7 +18,7 @@ if not api_key:
 
 client = Groq(api_key=api_key)
 
-GROQ_MODEL = "openai/gpt-oss-20b"
+GROQ_MODEL = "openai/gpt-oss-120b"
 # file_path = "Requirement/Email.eml"
 
 
@@ -76,6 +76,26 @@ Score:
 41-60  = Medium
 61-80  = High
 81-100 = Critical
+This is the output format
+    urgency: bool
+    authority_impersonation: bool
+    fear: bool
+    reward: bool
+    secrecy: bool
+
+    detected: bool
+
+    techniques: List[str]
+
+    explanation: str
+
+    evidence: List[str]
+
+    risk_impact: str
+
+    recommendation: str
+
+    social_engineering_score: int = Field(ge=0, le=100)
 
 #important
 Explanation:summary in only one line

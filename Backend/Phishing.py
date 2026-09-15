@@ -190,6 +190,18 @@ Analyze these indicators:
 
 For malicious URL, shortened URL, and obfuscated URL,
 return the actual URL if one exists. Otherwise return an empty list.
+this is the output Format
+
+    suspicious_sender:str | None = None
+    spoofed_sender:str | None = None
+    lookalike_domain:str | None = None
+    malicious_URL:List[str] | None = None
+    shortened_URL:List[str] | None = None
+    obfuscated_URL:List[str] | None = None
+    suspicious_attachment:str | None = None
+    fake_login_pages:str | None = None
+    credential_harvesting:str | None = None
+    suspicious_redirects:str | None = None
 
 For the other indicators, provide the explanation in a single sentence.
 
@@ -204,7 +216,7 @@ Do not invent information that is not present in the email.
 
         response = client.chat.completions.create(
 
-            model="openai/gpt-oss-20b",
+            model="openai/gpt-oss-120b",
 
             messages=[
                 {
