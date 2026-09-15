@@ -77,3 +77,5 @@ class Phising_indicate(BaseModel):
     credential_harvesting:str | None = None
     credential_harvesting:bool | None
     suspicious_redirects:str | None = None
+
+    Explanation:str | None = None
