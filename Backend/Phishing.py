@@ -192,15 +192,26 @@ For malicious URL, shortened URL, and obfuscated URL,
 return the actual URL if one exists. Otherwise return an empty list.
 this is the output Format
 
-    suspicious_sender:str | None = None
+suspicious_sender:str | None = None
+    suspicious_sender_bool:bool|None= None
     spoofed_sender:str | None = None
+    spoofed_sender_bool:bool|None= None
     lookalike_domain:str | None = None
+    lookalike_domain_bool:bool | None  = None
     malicious_URL:List[str] | None = None
+    malicious_url_data:bool | None = None
     shortened_URL:List[str] | None = None
+    shortend_url_data:bool | None = None
+
     obfuscated_URL:List[str] | None = None
+    obfuscated__url_data:bool | None = None
+
     suspicious_attachment:str | None = None
+    suspicious_attachment_data:bool | None = None
     fake_login_pages:str | None = None
+    fake_login_pages_data:bool | None
     credential_harvesting:str | None = None
+    credential_harvesting:bool | None
     suspicious_redirects:str | None = None
 
 For the other indicators, provide the explanation in a single sentence.
