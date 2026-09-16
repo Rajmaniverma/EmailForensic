@@ -228,7 +228,7 @@ Do not invent information that is not present in the email.
 
         response = client.chat.completions.create(
 
-            model="openai/gpt-oss-20b",
+            model="openai/gpt-oss-safeguard-20b",
 
             messages=[
                 {

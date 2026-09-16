@@ -18,7 +18,7 @@ if not api_key:
 
 client = Groq(api_key=api_key)
 
-GROQ_MODEL = "openai/gpt-oss-20b"
+GROQ_MODEL = "openai/gpt-oss-safeguard-20b"
 # file_path = "Requirement/Email.eml"
 
 
