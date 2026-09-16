@@ -49,6 +49,7 @@ app.add_middleware( CORSMiddleware,
     allow_origins=[
         "https://email-forensic.vercel.app",
         "http://localhost:5173",
+        "https://emailforensic31.online/"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -493,7 +494,7 @@ def google_callback(request: Request , db: Session = Depends(get_db)):
     )
 
     return RedirectResponse(
-    url=f"https://email-forensic.vercel.app/dashboard?token={access_token}",
+    url=f"https://emailforensic31.online/dashboard?token={access_token}",
     status_code=303
 )
 
