@@ -47,9 +47,9 @@ app = FastAPI( title="Gmail Email Analyzer", version="1.0.0")
 # ============================================================
 app.add_middleware( CORSMiddleware,
     allow_origins=[
-        "https://email-forensic.vercel.app",
+    
         "http://localhost:5173",
-        "https://emailforensic31.online/"
+        "https://emailforensic31.online"
     ],
     allow_credentials=True,
     allow_methods=["*"],

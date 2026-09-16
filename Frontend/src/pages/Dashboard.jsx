@@ -60,6 +60,7 @@ function Dashboard() {
           Authorization: `Bearer ${token}`,
         },
       });
+      console.log("GmailResponse:", gmailResponse)
 
       if (!gmailResponse.ok) {
         throw new Error("Failed to fetch Gmail messages");
