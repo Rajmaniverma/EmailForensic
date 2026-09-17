@@ -7,13 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from jose import jwt
+from cachetools import TTLCache
+
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from cachetools import TTLCache
 
 from Database import get_db
 from DBmodel import GmailAccount
-
 from Gmail_Auth import SCOPES
 
 from Gmail_Parser import (
@@ -56,7 +56,7 @@ if not JWT_SECRET:
 # GOOGLE SCOPES
 # ============================================================
 
-# Use the scopes from Gmail_Auth.py
+# Use the SCOPES defined in Gmail_Auth.py
 GMAIL_SCOPES = SCOPES
 
 
@@ -65,24 +65,30 @@ GMAIL_SCOPES = SCOPES
 # ============================================================
 
 """
-30-minute temporary in-memory cache.
+Temporary in-memory cache.
 
-Important:
-- This is NOT MySQL storage.
-- Data lives in application memory.
-- Entries automatically expire after 30 minutes.
-- Maximum 100 email-analysis results are stored.
-- Cache is lost when the FastAPI process restarts.
+TTL:
+    1800 seconds = 30 minutes
+
+Maximum entries:
+    100
+
+IMPORTANT:
+    This cache is NOT MySQL storage.
+
+    Email analysis results are kept temporarily
+    in application memory and automatically expire
+    after 30 minutes.
 """
 
 analysis_cache = TTLCache(
     maxsize=100,
-    ttl=1800  # 1800 seconds = 30 minutes
+    ttl=1800
 )
 
 
 # ============================================================
-# HELPER: GET GMAIL CLIENT
+# GET GMAIL CLIENT
 # ============================================================
 
 def get_gmail_client(
@@ -90,12 +96,20 @@ def get_gmail_client(
     db: Session
 ):
     """
-    Authenticate the user using JWT,
-    retrieve the Google OAuth token from MySQL,
-    and create an authenticated Gmail API client.
+    Authenticate user using JWT.
+
+    Then:
+        JWT
+         ↓
+        account_id
+         ↓
+        GmailAccount
+         ↓
+        google_token
+         ↓
+        Gmail API client
 
     Gmail messages are NOT stored in MySQL.
-    Only GmailAccount contains the OAuth token.
     """
 
     # ========================================================
@@ -176,7 +190,7 @@ def get_gmail_client(
         )
 
     # ========================================================
-    # 4. GET GMAIL ACCOUNT FROM DATABASE
+    # 4. GET GMAIL ACCOUNT
     # ========================================================
 
     account = (
@@ -294,15 +308,13 @@ def get_messages(
     """
     Get Gmail inbox messages.
 
-    Does NOT save Gmail messages to MySQL.
+    IMPORTANT:
+        Gmail messages are NOT stored in MySQL.
 
-    Only:
+    Only temporary response data is created:
+
         message_id
         subject
-
-    are returned.
-
-    Full email content is NOT fetched here.
     """
 
     # ========================================================
@@ -384,7 +396,7 @@ def get_messages(
     response_messages = []
 
     # ========================================================
-    # 6. CREATE BATCH REQUEST
+    # 6. CREATE GMAIL BATCH REQUEST
     # ========================================================
 
     batch = gmail.new_batch_http_request()
@@ -396,7 +408,7 @@ def get_messages(
     ):
 
         # ----------------------------------------------------
-        # Handle individual request error
+        # Handle individual Gmail request error
         # ----------------------------------------------------
 
         if exception:
@@ -409,7 +421,7 @@ def get_messages(
             return
 
         # ----------------------------------------------------
-        # Extract headers
+        # Get headers
         # ----------------------------------------------------
 
         headers = (
@@ -450,7 +462,7 @@ def get_messages(
                 break
 
         # ----------------------------------------------------
-        # Add temporarily to response
+        # Add temporary response
         # ----------------------------------------------------
 
         response_messages.append(
@@ -461,7 +473,7 @@ def get_messages(
         )
 
     # ========================================================
-    # 7. ADD MESSAGE REQUESTS TO BATCH
+    # 7. ADD MESSAGES TO BATCH
     # ========================================================
 
     for msg in messages:
@@ -507,7 +519,7 @@ def get_messages(
         )
 
     # ========================================================
-    # 9. RETURN RESPONSE
+    # 9. RETURN MESSAGES
     # ========================================================
 
     return {
@@ -540,21 +552,21 @@ def get_email_by_message_id(
     db: Session = Depends(get_db)
 ):
     """
-    Fetch one complete Gmail email.
+    Fetch complete Gmail email.
 
-    Flow:
+    This endpoint does NOT perform analysis.
+
+    It only:
 
         Gmail
           ↓
-        Backend
+        Fetch full email
           ↓
-        Parser
+        Parse
           ↓
-        email_data
-          ↓
-        Frontend
+        Return email data
 
-    The email is NOT stored in MySQL.
+    No GmailMessage database storage.
     """
 
     # ========================================================
@@ -578,7 +590,7 @@ def get_email_by_message_id(
     )
 
     # ========================================================
-    # 3. FETCH COMPLETE EMAIL
+    # 3. FETCH FULL EMAIL
     # ========================================================
 
     try:
@@ -610,8 +622,10 @@ def get_email_by_message_id(
 
     try:
 
-        gmail_parsed = parse_gmail_message(
-            gmail_msg
+        gmail_parsed = (
+            parse_gmail_message(
+                gmail_msg
+            )
         )
 
         email_data = (
@@ -653,9 +667,9 @@ def full_analysis(
     db: Session = Depends(get_db)
 ):
     """
-    Complete email security analysis.
+    Perform complete security analysis.
 
-    Analysis:
+    Flow:
 
         Gmail
           ↓
@@ -663,30 +677,28 @@ def full_analysis(
           ↓
         Parse email
           ↓
-        email_data
+        Check cache
           ↓
-        ┌────────────────────────────┐
-        │ Parallel Analysis          │
-        │                            │
-        │ 1. Detection Engine        │
-        │ 2. Phishing Detection      │
-        │ 3. Social Engineering      │
-        │ 4. IP Intelligence         │
-        └────────────────────────────┘
-          ↓
-        Forensic Report
-          ↓
-        Temporary Cache
-          ↓
-        Frontend
+        ┌──────────────────────┐
+        │ Cache HIT            │
+        │                      │
+        │ Return immediately   │
+        └──────────────────────┘
+
+                 OR
+
+        ┌──────────────────────┐
+        │ Cache MISS           │
+        │                      │
+        │ Run 4 analyses       │
+        └──────────────────────┘
+                  ↓
+        Store result in cache
+                  ↓
+             Return result
 
     Cache:
         30 minutes
-        maximum 100 results
-
-    Database:
-        Gmail messages are NOT stored.
-        Analysis results are NOT stored in MySQL.
     """
 
     # ========================================================
@@ -714,9 +726,14 @@ def full_analysis(
     # ========================================================
 
     """
-    Account ID is included because Gmail message IDs
-    should not be trusted as a globally unique cache
-    identifier across different accounts.
+    Include account ID.
+
+    Example:
+
+        account 1 + message 123
+        account 2 + message 123
+
+    are treated as different cache entries.
     """
 
     cache_key = (
@@ -724,7 +741,7 @@ def full_analysis(
     )
 
     # ========================================================
-    # 4. CHECK CACHE
+    # 4. CHECK CACHE FIRST
     # ========================================================
 
     cached_result = analysis_cache.get(
@@ -732,6 +749,10 @@ def full_analysis(
     )
 
     if cached_result is not None:
+
+        print(
+            f"[CACHE HIT] {cache_key}"
+        )
 
         return {
             "success": True,
@@ -746,7 +767,15 @@ def full_analysis(
         }
 
     # ========================================================
-    # 5. FETCH COMPLETE EMAIL FROM GMAIL
+    # CACHE MISS
+    # ========================================================
+
+    print(
+        f"[CACHE MISS] {cache_key}"
+    )
+
+    # ========================================================
+    # 5. FETCH COMPLETE EMAIL
     # ========================================================
 
     try:
@@ -778,8 +807,10 @@ def full_analysis(
 
     try:
 
-        gmail_parsed = parse_gmail_message(
-            gmail_msg
+        gmail_parsed = (
+            parse_gmail_message(
+                gmail_msg
+            )
         )
 
         email_data = (
@@ -838,7 +869,7 @@ def full_analysis(
             }
 
     # ========================================================
-    # 9. SOCIAL ENGINEERING ANALYSIS
+    # 9. SOCIAL ENGINEERING
     # ========================================================
 
     def run_social():
@@ -851,27 +882,31 @@ def full_analysis(
                 )
             )
 
-            # ----------------------------------------------
+            # ------------------------------------------------
             # Pydantic v2
-            # ----------------------------------------------
+            # ------------------------------------------------
 
             if hasattr(
                 social,
                 "model_dump"
             ):
 
-                social = social.model_dump()
+                social = (
+                    social.model_dump()
+                )
 
-            # ----------------------------------------------
+            # ------------------------------------------------
             # Pydantic v1
-            # ----------------------------------------------
+            # ------------------------------------------------
 
             elif hasattr(
                 social,
                 "dict"
             ):
 
-                social = social.dict()
+                social = (
+                    social.dict()
+                )
 
             return social
 
@@ -913,7 +948,7 @@ def full_analysis(
             }
 
     # ========================================================
-    # 11. RUN ALL FOUR ANALYSES IN PARALLEL
+    # 11. RUN ALL ANALYSES IN PARALLEL
     # ========================================================
 
     try:
@@ -923,7 +958,7 @@ def full_analysis(
         ) as executor:
 
             # ------------------------------------------------
-            # Submit all tasks
+            # Submit all analysis jobs
             # ------------------------------------------------
 
             detection_future = (
@@ -951,7 +986,7 @@ def full_analysis(
             )
 
             # ------------------------------------------------
-            # Wait for results
+            # Get results
             # ------------------------------------------------
 
             detection = (
@@ -1000,20 +1035,16 @@ def full_analysis(
     }
 
     # ========================================================
-    # 13. SAVE RESULT TO TEMPORARY CACHE
+    # 13. STORE RESULT IN 30-MINUTE CACHE
     # ========================================================
-
-    """
-    This does NOT save the result to MySQL.
-
-    It is kept in Python process memory only.
-
-    TTL = 30 minutes.
-    """
 
     analysis_cache[
         cache_key
     ] = result
+
+    print(
+        f"[CACHE SET] {cache_key}"
+    )
 
     # ========================================================
     # 14. RETURN NEW ANALYSIS
@@ -1039,17 +1070,21 @@ def full_analysis(
 
 @router.delete("/analysis-cache")
 def clear_analysis_cache():
+
     """
     Clear all temporary analysis results.
 
-    Recommended mainly for development/testing.
+    Useful during development/testing.
+
+    Do not expose this endpoint publicly without
+    proper admin authentication.
     """
 
     analysis_cache.clear()
 
     return {
         "success": True,
-        "message": "Temporary analysis cache cleared"
+        "message": "Analysis cache cleared"
     }
 
 
@@ -1059,18 +1094,25 @@ def clear_analysis_cache():
 
 @router.get("/analysis-cache/status")
 def analysis_cache_status():
-    """
-    Return basic cache information.
 
-    Does not return email content.
+    """
+    Return cache information.
+
+    Does NOT return email content.
     """
 
     return {
+
         "success": True,
+
         "cache_enabled": True,
+
         "ttl_seconds": 1800,
+
         "ttl_minutes": 30,
+
         "max_entries": 100,
+
         "current_entries": len(
             analysis_cache
         )
@@ -1085,7 +1127,10 @@ def analysis_cache_status():
 def health_check():
 
     return {
+
         "success": True,
+
         "service": "Email Forensic API",
+
         "status": "running"
     }
