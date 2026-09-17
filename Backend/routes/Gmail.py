@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from jose import jwt
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from cachetools import TTLCache
 
 from Database import get_db
 from DBmodel import GmailAccount
@@ -26,6 +27,10 @@ from Social_Engineering import analyze_social_engineering
 from IPGeolocation.IP_Geolocation import get_ip_intelligence
 
 
+# ============================================================
+# ROUTER
+# ============================================================
+
 router = APIRouter()
 
 
@@ -42,17 +47,38 @@ JWT_ALGORITHM = "HS256"
 # ============================================================
 
 if not JWT_SECRET:
-    raise RuntimeError("JWT_SECRET environment variable is not set")
+    raise RuntimeError(
+        "JWT_SECRET environment variable is not set"
+    )
 
 
 # ============================================================
 # GOOGLE SCOPES
 # ============================================================
 
-# Keep this consistent with Gmail_Auth.py
-# If SCOPES is already defined there, we use that value.
-
+# Use the scopes from Gmail_Auth.py
 GMAIL_SCOPES = SCOPES
+
+
+# ============================================================
+# TEMPORARY ANALYSIS CACHE
+# ============================================================
+
+"""
+30-minute temporary in-memory cache.
+
+Important:
+- This is NOT MySQL storage.
+- Data lives in application memory.
+- Entries automatically expire after 30 minutes.
+- Maximum 100 email-analysis results are stored.
+- Cache is lost when the FastAPI process restarts.
+"""
+
+analysis_cache = TTLCache(
+    maxsize=100,
+    ttl=1800  # 1800 seconds = 30 minutes
+)
 
 
 # ============================================================
@@ -68,43 +94,52 @@ def get_gmail_client(
     retrieve the Google OAuth token from MySQL,
     and create an authenticated Gmail API client.
 
-    IMPORTANT:
-    - Gmail messages are NOT stored in MySQL.
-    - Only GmailAccount contains the OAuth token.
-    - Email content exists only temporarily during the request.
+    Gmail messages are NOT stored in MySQL.
+    Only GmailAccount contains the OAuth token.
     """
 
-    # --------------------------------------------------------
+    # ========================================================
     # 1. GET JWT FROM AUTHORIZATION HEADER
-    # --------------------------------------------------------
+    # ========================================================
 
-    authorization = request.headers.get("Authorization")
+    authorization = request.headers.get(
+        "Authorization"
+    )
 
     if not authorization:
+
         raise HTTPException(
             status_code=401,
             detail="Authorization token missing"
         )
 
-    if not authorization.startswith("Bearer "):
+    if not authorization.startswith(
+        "Bearer "
+    ):
+
         raise HTTPException(
             status_code=401,
             detail="Invalid authorization header"
         )
 
-    token = authorization.split(" ", 1)[1].strip()
+    token = authorization.split(
+        " ",
+        1
+    )[1].strip()
 
     if not token:
+
         raise HTTPException(
             status_code=401,
             detail="Empty authorization token"
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # 2. DECODE JWT
-    # --------------------------------------------------------
+    # ========================================================
 
     try:
+
         payload = jwt.decode(
             token,
             JWT_SECRET,
@@ -112,95 +147,120 @@ def get_gmail_client(
         )
 
     except jwt.ExpiredSignatureError:
+
         raise HTTPException(
             status_code=401,
             detail="Authentication token expired"
         )
 
     except jwt.JWTError:
+
         raise HTTPException(
             status_code=401,
             detail="Invalid authentication token"
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # 3. GET ACCOUNT ID
-    # --------------------------------------------------------
+    # ========================================================
 
-    account_id = payload.get("account_id")
+    account_id = payload.get(
+        "account_id"
+    )
 
     if not account_id:
+
         raise HTTPException(
             status_code=401,
             detail="Invalid authentication token"
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # 4. GET GMAIL ACCOUNT FROM DATABASE
-    # --------------------------------------------------------
+    # ========================================================
 
     account = (
         db.query(GmailAccount)
-        .filter(GmailAccount.id == account_id)
+        .filter(
+            GmailAccount.id == account_id
+        )
         .first()
     )
 
     if not account:
+
         raise HTTPException(
             status_code=404,
             detail="Gmail account not found"
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # 5. CHECK GOOGLE TOKEN
-    # --------------------------------------------------------
+    # ========================================================
 
     if not account.google_token:
+
         raise HTTPException(
             status_code=401,
             detail="Gmail account not connected"
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # 6. LOAD GOOGLE TOKEN
-    # --------------------------------------------------------
+    # ========================================================
 
     try:
-        token_data = json.loads(account.google_token)
+
+        token_data = json.loads(
+            account.google_token
+        )
 
     except json.JSONDecodeError:
+
         raise HTTPException(
             status_code=500,
             detail="Invalid Google token stored in database"
         )
 
-    if not isinstance(token_data, dict):
+    if not isinstance(
+        token_data,
+        dict
+    ):
+
         raise HTTPException(
             status_code=500,
             detail="Invalid Google token format"
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # 7. CREATE GOOGLE CREDENTIALS
-    # --------------------------------------------------------
+    # ========================================================
 
     try:
-        credentials = Credentials.from_authorized_user_info(
-            token_data,
-            GMAIL_SCOPES
+
+        credentials = (
+            Credentials.from_authorized_user_info(
+                token_data,
+                GMAIL_SCOPES
+            )
         )
 
     except Exception as e:
+
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to create Google credentials: {str(e)}"
+            detail=(
+                "Failed to create Google credentials: "
+                f"{str(e)}"
+            )
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # 8. CREATE GMAIL CLIENT
-    # --------------------------------------------------------
+    # ========================================================
 
     try:
+
         gmail = build(
             "gmail",
             "v1",
@@ -209,9 +269,13 @@ def get_gmail_client(
         )
 
     except Exception as e:
+
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to create Gmail client: {str(e)}"
+            detail=(
+                "Failed to create Gmail client: "
+                f"{str(e)}"
+            )
         )
 
     return gmail, account
@@ -230,25 +294,29 @@ def get_messages(
     """
     Get Gmail inbox messages.
 
-    IMPORTANT:
-    - Does NOT save messages in MySQL.
-    - Gmail remains the source of truth.
-    - Only message_id and subject are returned.
-    - Full email content is NOT fetched here.
+    Does NOT save Gmail messages to MySQL.
+
+    Only:
+        message_id
+        subject
+
+    are returned.
+
+    Full email content is NOT fetched here.
     """
 
-    # --------------------------------------------------------
+    # ========================================================
     # 1. GET GMAIL CLIENT
-    # --------------------------------------------------------
+    # ========================================================
 
     gmail, account = get_gmail_client(
         request,
         db
     )
 
-    # --------------------------------------------------------
+    # ========================================================
     # 2. GMAIL LIST PARAMETERS
-    # --------------------------------------------------------
+    # ========================================================
 
     params = {
         "userId": "me",
@@ -257,11 +325,12 @@ def get_messages(
     }
 
     if page_token:
+
         params["pageToken"] = page_token
 
-    # --------------------------------------------------------
+    # ========================================================
     # 3. GET MESSAGE IDS
-    # --------------------------------------------------------
+    # ========================================================
 
     try:
 
@@ -276,35 +345,47 @@ def get_messages(
 
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to fetch Gmail messages: {str(e)}"
+            detail=(
+                "Failed to fetch Gmail messages: "
+                f"{str(e)}"
+            )
         )
 
-    messages = result.get("messages", [])
+    messages = result.get(
+        "messages",
+        []
+    )
 
-    # --------------------------------------------------------
+    # ========================================================
     # 4. NO MESSAGES
-    # --------------------------------------------------------
+    # ========================================================
 
     if not messages:
 
         return {
             "success": True,
             "messages": [],
-            "next_page_token": result.get("nextPageToken"),
+            "next_page_token": (
+                result.get(
+                    "nextPageToken"
+                )
+            ),
             "has_next": bool(
-                result.get("nextPageToken")
+                result.get(
+                    "nextPageToken"
+                )
             )
         }
 
-    # --------------------------------------------------------
+    # ========================================================
     # 5. TEMPORARY RESPONSE LIST
-    # --------------------------------------------------------
+    # ========================================================
 
     response_messages = []
 
-    # --------------------------------------------------------
-    # 6. CREATE GMAIL BATCH REQUEST
-    # --------------------------------------------------------
+    # ========================================================
+    # 6. CREATE BATCH REQUEST
+    # ========================================================
 
     batch = gmail.new_batch_http_request()
 
@@ -313,6 +394,10 @@ def get_messages(
         response,
         exception
     ):
+
+        # ----------------------------------------------------
+        # Handle individual request error
+        # ----------------------------------------------------
 
         if exception:
 
@@ -329,16 +414,31 @@ def get_messages(
 
         headers = (
             response
-            .get("payload", {})
-            .get("headers", [])
+            .get(
+                "payload",
+                {}
+            )
+            .get(
+                "headers",
+                []
+            )
         )
 
         subject = "(No Subject)"
 
+        # ----------------------------------------------------
+        # Find Subject
+        # ----------------------------------------------------
+
         for header in headers:
 
             if (
-                header.get("name", "").lower()
+                header
+                .get(
+                    "name",
+                    ""
+                )
+                .lower()
                 == "subject"
             ):
 
@@ -360,13 +460,15 @@ def get_messages(
             }
         )
 
-    # --------------------------------------------------------
-    # 7. ADD MESSAGES TO BATCH
-    # --------------------------------------------------------
+    # ========================================================
+    # 7. ADD MESSAGE REQUESTS TO BATCH
+    # ========================================================
 
     for msg in messages:
 
-        message_id = msg.get("id")
+        message_id = msg.get(
+            "id"
+        )
 
         if not message_id:
             continue
@@ -378,15 +480,17 @@ def get_messages(
                 userId="me",
                 id=message_id,
                 format="metadata",
-                metadataHeaders=["Subject"]
+                metadataHeaders=[
+                    "Subject"
+                ]
             ),
             callback=process_message,
             request_id=message_id
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # 8. EXECUTE BATCH
-    # --------------------------------------------------------
+    # ========================================================
 
     try:
 
@@ -402,18 +506,25 @@ def get_messages(
             )
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # 9. RETURN RESPONSE
-    # --------------------------------------------------------
+    # ========================================================
 
     return {
         "success": True,
+
         "messages": response_messages,
-        "next_page_token": result.get(
-            "nextPageToken"
+
+        "next_page_token": (
+            result.get(
+                "nextPageToken"
+            )
         ),
+
         "has_next": bool(
-            result.get("nextPageToken")
+            result.get(
+                "nextPageToken"
+            )
         )
     }
 
@@ -431,40 +542,44 @@ def get_email_by_message_id(
     """
     Fetch one complete Gmail email.
 
-    The email is:
+    Flow:
+
         Gmail
           ↓
         Backend
           ↓
-        Parse
+        Parser
+          ↓
+        email_data
           ↓
         Frontend
 
-    It is NOT stored in MySQL.
+    The email is NOT stored in MySQL.
     """
 
-    # --------------------------------------------------------
-    # Validate message ID
-    # --------------------------------------------------------
+    # ========================================================
+    # 1. VALIDATE MESSAGE ID
+    # ========================================================
 
     if not message_id:
+
         raise HTTPException(
             status_code=400,
             detail="Message ID is required"
         )
 
-    # --------------------------------------------------------
-    # Get Gmail client
-    # --------------------------------------------------------
+    # ========================================================
+    # 2. GET GMAIL CLIENT
+    # ========================================================
 
     gmail, account = get_gmail_client(
         request,
         db
     )
 
-    # --------------------------------------------------------
-    # Fetch full Gmail message
-    # --------------------------------------------------------
+    # ========================================================
+    # 3. FETCH COMPLETE EMAIL
+    # ========================================================
 
     try:
 
@@ -483,12 +598,15 @@ def get_email_by_message_id(
 
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to fetch email: {str(e)}"
+            detail=(
+                "Failed to fetch email: "
+                f"{str(e)}"
+            )
         )
 
-    # --------------------------------------------------------
-    # Parse Gmail message
-    # --------------------------------------------------------
+    # ========================================================
+    # 4. PARSE EMAIL
+    # ========================================================
 
     try:
 
@@ -496,21 +614,26 @@ def get_email_by_message_id(
             gmail_msg
         )
 
-        email_data = convert_gmail_to_email_data(
-            gmail_parsed,
-            gmail_msg
+        email_data = (
+            convert_gmail_to_email_data(
+                gmail_parsed,
+                gmail_msg
+            )
         )
 
     except Exception as e:
 
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to parse email: {str(e)}"
+            detail=(
+                "Failed to parse email: "
+                f"{str(e)}"
+            )
         )
 
-    # --------------------------------------------------------
-    # Return email
-    # --------------------------------------------------------
+    # ========================================================
+    # 5. RETURN EMAIL
+    # ========================================================
 
     return {
         "success": True,
@@ -530,9 +653,9 @@ def full_analysis(
     db: Session = Depends(get_db)
 ):
     """
-    Perform complete security analysis on one Gmail message.
+    Complete email security analysis.
 
-    Pipeline:
+    Analysis:
 
         Gmail
           ↓
@@ -540,29 +663,35 @@ def full_analysis(
           ↓
         Parse email
           ↓
-        Feature extraction
+        email_data
           ↓
-        ┌──────────────────────────┐
-        │ Parallel analysis       │
-        │                          │
-        │ 1. Detection Engine      │
-        │ 2. Phishing Detection    │
-        │ 3. Social Engineering    │
-        │ 4. IP Intelligence       │
-        └──────────────────────────┘
+        ┌────────────────────────────┐
+        │ Parallel Analysis          │
+        │                            │
+        │ 1. Detection Engine        │
+        │ 2. Phishing Detection      │
+        │ 3. Social Engineering      │
+        │ 4. IP Intelligence         │
+        └────────────────────────────┘
           ↓
-        Forensic Result
+        Forensic Report
+          ↓
+        Temporary Cache
           ↓
         Frontend
 
-    IMPORTANT:
-    No analysis result is cached.
-    No email content is stored in MySQL.
+    Cache:
+        30 minutes
+        maximum 100 results
+
+    Database:
+        Gmail messages are NOT stored.
+        Analysis results are NOT stored in MySQL.
     """
 
-    # --------------------------------------------------------
-    # Validate message ID
-    # --------------------------------------------------------
+    # ========================================================
+    # 1. VALIDATE MESSAGE ID
+    # ========================================================
 
     if not message_id:
 
@@ -571,18 +700,54 @@ def full_analysis(
             detail="Message ID is required"
         )
 
-    # --------------------------------------------------------
-    # Get Gmail client
-    # --------------------------------------------------------
+    # ========================================================
+    # 2. GET GMAIL CLIENT
+    # ========================================================
 
     gmail, account = get_gmail_client(
         request,
         db
     )
 
-    # --------------------------------------------------------
-    # FETCH COMPLETE EMAIL
-    # --------------------------------------------------------
+    # ========================================================
+    # 3. CREATE UNIQUE CACHE KEY
+    # ========================================================
+
+    """
+    Account ID is included because Gmail message IDs
+    should not be trusted as a globally unique cache
+    identifier across different accounts.
+    """
+
+    cache_key = (
+        f"{account.id}:{message_id}"
+    )
+
+    # ========================================================
+    # 4. CHECK CACHE
+    # ========================================================
+
+    cached_result = analysis_cache.get(
+        cache_key
+    )
+
+    if cached_result is not None:
+
+        return {
+            "success": True,
+
+            "source": "cache",
+
+            "cached": True,
+
+            "cache_ttl": "30 minutes",
+
+            "data": cached_result
+        }
+
+    # ========================================================
+    # 5. FETCH COMPLETE EMAIL FROM GMAIL
+    # ========================================================
 
     try:
 
@@ -601,12 +766,15 @@ def full_analysis(
 
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to fetch email: {str(e)}"
+            detail=(
+                "Failed to fetch email: "
+                f"{str(e)}"
+            )
         )
 
-    # --------------------------------------------------------
-    # PARSE EMAIL
-    # --------------------------------------------------------
+    # ========================================================
+    # 6. PARSE EMAIL
+    # ========================================================
 
     try:
 
@@ -614,25 +782,26 @@ def full_analysis(
             gmail_msg
         )
 
-        email_data = convert_gmail_to_email_data(
-            gmail_parsed,
-            gmail_msg
+        email_data = (
+            convert_gmail_to_email_data(
+                gmail_parsed,
+                gmail_msg
+            )
         )
 
     except Exception as e:
 
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to parse email: {str(e)}"
+            detail=(
+                "Failed to parse email: "
+                f"{str(e)}"
+            )
         )
 
     # ========================================================
-    # ANALYSIS FUNCTIONS
+    # 7. DETECTION ENGINE
     # ========================================================
-
-    # --------------------------------------------------------
-    # 1. Detection Engine
-    # --------------------------------------------------------
 
     def run_detection():
 
@@ -649,9 +818,9 @@ def full_analysis(
                 "error": str(e)
             }
 
-    # --------------------------------------------------------
-    # 2. Phishing Detection
-    # --------------------------------------------------------
+    # ========================================================
+    # 8. PHISHING DETECTION
+    # ========================================================
 
     def run_phishing():
 
@@ -668,19 +837,24 @@ def full_analysis(
                 "error": str(e)
             }
 
-    # --------------------------------------------------------
-    # 3. Social Engineering
-    # --------------------------------------------------------
+    # ========================================================
+    # 9. SOCIAL ENGINEERING ANALYSIS
+    # ========================================================
 
     def run_social():
 
         try:
 
-            social = analyze_social_engineering(
-                email_data
+            social = (
+                analyze_social_engineering(
+                    email_data
+                )
             )
 
+            # ----------------------------------------------
             # Pydantic v2
+            # ----------------------------------------------
+
             if hasattr(
                 social,
                 "model_dump"
@@ -688,7 +862,10 @@ def full_analysis(
 
                 social = social.model_dump()
 
+            # ----------------------------------------------
             # Pydantic v1
+            # ----------------------------------------------
+
             elif hasattr(
                 social,
                 "dict"
@@ -705,9 +882,9 @@ def full_analysis(
                 "error": str(e)
             }
 
-    # --------------------------------------------------------
-    # 4. IP Intelligence
-    # --------------------------------------------------------
+    # ========================================================
+    # 10. IP INTELLIGENCE
+    # ========================================================
 
     def run_ip():
 
@@ -736,7 +913,7 @@ def full_analysis(
             }
 
     # ========================================================
-    # RUN ALL ANALYSES IN PARALLEL
+    # 11. RUN ALL FOUR ANALYSES IN PARALLEL
     # ========================================================
 
     try:
@@ -744,6 +921,10 @@ def full_analysis(
         with ThreadPoolExecutor(
             max_workers=4
         ) as executor:
+
+            # ------------------------------------------------
+            # Submit all tasks
+            # ------------------------------------------------
 
             detection_future = (
                 executor.submit(
@@ -793,11 +974,14 @@ def full_analysis(
 
         raise HTTPException(
             status_code=500,
-            detail=f"Analysis failed: {str(e)}"
+            detail=(
+                "Analysis failed: "
+                f"{str(e)}"
+            )
         )
 
     # ========================================================
-    # FINAL FORENSIC RESULT
+    # 12. CREATE FORENSIC RESULT
     # ========================================================
 
     result = {
@@ -816,7 +1000,23 @@ def full_analysis(
     }
 
     # ========================================================
-    # RETURN RESULT
+    # 13. SAVE RESULT TO TEMPORARY CACHE
+    # ========================================================
+
+    """
+    This does NOT save the result to MySQL.
+
+    It is kept in Python process memory only.
+
+    TTL = 30 minutes.
+    """
+
+    analysis_cache[
+        cache_key
+    ] = result
+
+    # ========================================================
+    # 14. RETURN NEW ANALYSIS
     # ========================================================
 
     return {
@@ -825,12 +1025,60 @@ def full_analysis(
 
         "source": "new_analysis",
 
+        "cached": False,
+
+        "cache_ttl": "30 minutes",
+
         "data": result
     }
 
 
 # ============================================================
-# OPTIONAL: HEALTH CHECK
+# CLEAR ANALYSIS CACHE
+# ============================================================
+
+@router.delete("/analysis-cache")
+def clear_analysis_cache():
+    """
+    Clear all temporary analysis results.
+
+    Recommended mainly for development/testing.
+    """
+
+    analysis_cache.clear()
+
+    return {
+        "success": True,
+        "message": "Temporary analysis cache cleared"
+    }
+
+
+# ============================================================
+# CACHE STATUS
+# ============================================================
+
+@router.get("/analysis-cache/status")
+def analysis_cache_status():
+    """
+    Return basic cache information.
+
+    Does not return email content.
+    """
+
+    return {
+        "success": True,
+        "cache_enabled": True,
+        "ttl_seconds": 1800,
+        "ttl_minutes": 30,
+        "max_entries": 100,
+        "current_entries": len(
+            analysis_cache
+        )
+    }
+
+
+# ============================================================
+# HEALTH CHECK
 # ============================================================
 
 @router.get("/health")
