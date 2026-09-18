@@ -28,7 +28,7 @@ from Detection_engine import analyze_email
 from Database import get_db
 from DBmodel import GmailAccount, GmailMessage
 from Phishing import Phising_email
-from Gmail_parser import (
+from Gmail_Parser import (
     parse_gmail_message,
     convert_gmail_to_email_data
 )
