@@ -562,38 +562,26 @@ def Phising_email(email_data):
         # =================================================
 
         prompt = f"""
-You are an expert email security analyst.
+You are an expert email threat detection and forensic analyst.
 
-Analyze the following email for phishing and
-social-engineering indicators.
+Your task is to analyze ONLY the evidence provided below.
 
-IMPORTANT RULES:
+IMPORTANT:
+- Do not guess.
+- Do not invent evidence.
+- Do not create URLs, domains, sender information, or attachments.
+- Every TRUE indicator must be supported by evidence from the email.
+- Every FALSE indicator must have a short explanation.
+- The ML model result is only a phishing risk signal. It is NOT proof.
+- A long URL is NOT automatically malicious.
+- A legitimate domain is NOT automatically malicious.
+- Credential-related words alone do NOT prove credential harvesting.
+- Reply-To mismatch is a suspicious signal, not automatic proof of spoofing.
+- If evidence is insufficient, set the indicator to false and explain why.
+- For malicious URLs, do NOT claim a URL is malicious without reputation/threat-intelligence evidence.
+- Use the exact URLs provided. Never modify them.
 
-1. Do NOT assume that a URL is malicious only because
-   it is long.
-
-2. Do NOT assume that a legitimate domain is malicious.
-
-3. Do NOT invent URLs, domains, attachments, sender
-   information, or other evidence.
-
-4. Only report an indicator when there is evidence in
-   the provided email.
-
-5. The machine-learning score represents an EMAIL
-   PHISHING RISK SCORE. It is not proof that a URL
-   is malicious.
-
-6. URL maliciousness should only be confirmed when
-   actual URL reputation/threat-intelligence evidence
-   is available.
-
-7. If there is insufficient evidence, return false
-   or null rather than guessing.
-
----------------------------------------------------------
-EMAIL
----------------------------------------------------------
+================ EMAIL =================
 
 Subject:
 {subject}
@@ -607,15 +595,18 @@ Reply-To:
 Body:
 {body}
 
-URLs extracted from the email:
+================ URLS =================
+
 {json.dumps(urls, indent=2)}
 
-Attachments:
+================ ATTACHMENTS =================
+
 {json.dumps(attachments, indent=2)}
 
----------------------------------------------------------
-MACHINE LEARNING ANALYSIS
----------------------------------------------------------
+================ ML ANALYSIS =================
+
+ML Classification:
+{ml_result}
 
 Phishing Risk Score:
 {phishing_score:.2f}
@@ -623,42 +614,71 @@ Phishing Risk Score:
 Legitimate Score:
 {legitimate_score:.2f}
 
-ML Classification:
-{ml_result}
-
-Extracted Features:
+Features:
 {json.dumps(features, indent=2)}
 
----------------------------------------------------------
-ANALYZE THESE INDICATORS
----------------------------------------------------------
+================ INDICATORS TO ANALYZE =================
 
-1. Suspicious sender
-2. Spoofed sender
-3. Lookalike domain
-4. Malicious URL
-5. Shortened URL
-6. Obfuscated URL
-7. Suspicious attachment
-8. Fake login page
-9. Credential harvesting
-10. Suspicious redirects
+For each indicator:
 
-For URL-related indicators:
+1. suspicious_sender
+   Check whether the sender address itself contains suspicious characteristics.
 
-- Return the actual URL from the email when applicable.
-- Never create or modify a URL.
-- A long URL alone is NOT malicious.
-- A suspicious-looking URL is NOT automatically malicious.
-- If there is no evidence, return false/null.
+2. spoofed_sender
+   Check whether the sender identity appears inconsistent with the available
+   sender/reply-to information.
+   Do NOT claim technical email spoofing without header/authentication evidence.
 
-For every other indicator, provide a short explanation
-based only on evidence present in the email.
+3. lookalike_domain
+   Check for visually deceptive domains, typosquatting, homoglyphs, etc.
+   Only mark true when there is actual evidence.
 
-Finally provide one concise overall explanation.
+4. malicious_URL
+   Only mark true when actual evidence indicates the URL is malicious.
+   Long URLs alone are NOT sufficient.
 
-Do not invent information.
-"""
+5. shortened_URL
+   Check whether the URL uses a known URL shortening service.
+
+6. obfuscated_URL
+   Check for actual URL obfuscation such as encoded characters,
+   unusual escaping, hexadecimal encoding, or deceptive URL construction.
+
+7. suspicious_attachment
+   Check the actual attachment names and extensions.
+   Do not claim an attachment exists when attachments are empty.
+
+8. fake_login_pages
+   Check whether the email contains evidence of a fake login page,
+   credential login lure, or deceptive authentication page.
+
+9. credential_harvesting
+   Check whether the email attempts to obtain passwords,
+   OTPs, authentication codes, banking credentials, or other secrets.
+
+10. suspicious_redirects
+    Check whether the email contains evidence of redirect chains,
+    tracking redirects, or deceptive redirection.
+
+================ OUTPUT RULES =================
+
+For every indicator:
+- Return the exact evidence when available.
+- Return true only when evidence supports it.
+- Return false when evidence does not support it.
+- Return null only when the evidence cannot be determined.
+
+Then provide a concise overall Explanation.
+
+The Explanation MUST:
+1. State whether the email appears suspicious or legitimate.
+2. Mention the most important evidence.
+3. Explain the ML result.
+4. Clearly distinguish signals from confirmed malicious activity.
+5. Never claim something that is not present in the supplied email.
+
+Return ONLY valid JSON according to the provided schema.
+    """
 
 
         # =================================================
