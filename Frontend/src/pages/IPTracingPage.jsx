@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
+
 import {
   MapContainer,
   TileLayer,
@@ -8,22 +10,33 @@ import {
   Circle,
   useMap,
 } from "react-leaflet";
+
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 const API_URL = "https://emailforensic.onrender.com";
 
-// Fix Leaflet marker icon
+// ============================================================
+// LEAFLET MARKER ICON
+// ============================================================
+
 delete L.Icon.Default.prototype._getIconUrl;
 
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+
   iconUrl:
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+
   shadowUrl:
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
+
+
+// ============================================================
+// MAP CONTROLLER
+// ============================================================
 
 function MapController({ position }) {
   const map = useMap();
@@ -37,226 +50,397 @@ function MapController({ position }) {
   return null;
 }
 
+
+// ============================================================
+// MAIN IP TRACING PAGE
+// ============================================================
+
 function IPTracingPage() {
+
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const messageId = searchParams.get("message_id");
 
-  const [emailData, setEmailData] = useState(null);
+  const [analysisData, setAnalysisData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // =========================================================
-  // FETCH SAME DATA USED BY ANALYZER
-  // =========================================================
+
+  // ==========================================================
+  // FETCH CACHED FORENSIC ANALYSIS
+  // ==========================================================
 
   useEffect(() => {
+
     const fetchAnalyzerData = async () => {
+
       try {
+
         setLoading(true);
         setError("");
 
-        const token = localStorage.getItem("access_token");
+        const token =
+          localStorage.getItem("access_token");
 
         if (!token) {
-          throw new Error("Authentication token is missing.");
+          throw new Error(
+            "Authentication token is missing."
+          );
         }
 
         if (!messageId) {
-          throw new Error("Message ID is missing.");
+          throw new Error(
+            "Message ID is missing."
+          );
         }
 
-        // Cache-first: do not trigger another AI analysis from this page.
+
+        // ------------------------------------------------------
+        // Get already generated analysis
+        // ------------------------------------------------------
+
         const response = await fetch(
-          `${API_URL}/gmail/cached-analysis/${encodeURIComponent(messageId)}`,
+          `${API_URL}/gmail/cached-analysis/${encodeURIComponent(
+            messageId
+          )}`,
           {
             method: "GET",
+
             headers: {
               Authorization: `Bearer ${token}`,
             },
           }
         );
 
+
         const data = await response.json();
 
+
         if (!response.ok) {
+
           throw new Error(
-            data?.detail || "Failed to fetch cached analysis."
+            data?.detail ||
+              "Failed to fetch cached analysis."
           );
         }
 
-        if (!data.success || !data.data) {
+
+        if (
+          !data.success ||
+          !data.data
+        ) {
+
           throw new Error(
             "No cached analysis found. Analyze this email from the Analyzer first."
           );
         }
 
-        // Unified response shape: data.data.email
-        setEmailData(data.data.email || null);
+
+        // ------------------------------------------------------
+        // IMPORTANT:
+        //
+        // Store COMPLETE analysis response.
+        //
+        // New backend:
+        //
+        // data
+        //   └── ip_tracing
+        //          └── ip_forensics
+        // ------------------------------------------------------
+
+        setAnalysisData(data.data);
 
       } catch (err) {
-        console.error("IP tracing error:", err);
-        setError(err.message || "Unable to fetch IP information.");
+
+        console.error(
+          "IP tracing error:",
+          err
+        );
+
+        setError(
+          err.message ||
+            "Unable to fetch IP forensic information."
+        );
+
       } finally {
+
         setLoading(false);
       }
     };
 
+
     fetchAnalyzerData();
+
   }, [messageId]);
 
-  // =========================================================
-  // EXTRACT IP
-  // =========================================================
 
-  const originIP = emailData?.origin_ip || "Not available";
+  // ==========================================================
+  // EMAIL DATA
+  // ==========================================================
 
-  // =========================================================
-  // EXTRACT GEOLOCATION
-  // =========================================================
+  const emailData =
+    analysisData?.email ||
+    analysisData?.email_data ||
+    {};
 
-  const geolocation = emailData?.geolocation || {};
 
-  /*
-    Depending on what get_ip_intelligence() returns,
-    this handles common names such as:
 
-      latitude / longitude
-      lat / lon
-      lat / lng
-  */
+  // ==========================================================
+  // NEW IP FORENSICS STRUCTURE
+  // ==========================================================
+
+  const ipForensics =
+    analysisData?.ip_tracing?.ip_forensics ||
+    {};
+
+
+  // ==========================================================
+  // SUMMARY
+  // ==========================================================
+
+  const summary =
+    ipForensics?.summary ||
+    {};
+
+
+  // ==========================================================
+  // ORIGIN ANALYSIS
+  // ==========================================================
+
+  const originAnalysis =
+    ipForensics?.origin_analysis ||
+    {};
+
+
+  // ==========================================================
+  // ALL IP RECORDS
+  // ==========================================================
+
+  const ipRecords = Array.isArray(
+    ipForensics?.ip_records
+  )
+    ? ipForensics.ip_records
+    : [];
+
+
+  // ==========================================================
+  // DETERMINE PRIMARY IP
+  //
+  // Priority:
+  //
+  // 1. Original sender IP
+  // 2. Earliest observable IP
+  // 3. First IP record
+  // ==========================================================
+
+  const primaryIP =
+    originAnalysis?.original_sender_ip ||
+    originAnalysis?.earliest_observable_ip ||
+    ipRecords?.[0]?.ip ||
+    null;
+
+
+  // ==========================================================
+  // FIND PRIMARY IP RECORD
+  // ==========================================================
+
+  const primaryRecord = useMemo(() => {
+
+    if (!ipRecords.length) {
+      return {};
+    }
+
+    return (
+      ipRecords.find(
+        (record) =>
+          record?.ip === primaryIP
+      ) ||
+      ipRecords[0] ||
+      {}
+    );
+
+  }, [ipRecords, primaryIP]);
+
+
+  // ==========================================================
+  // PRIMARY GEOLOCATION
+  // ==========================================================
+
+  const geolocation =
+    primaryRecord?.geolocation ||
+    originAnalysis?.geolocation ||
+    {};
+
+
+  // ==========================================================
+  // PRIMARY INTELLIGENCE
+  // ==========================================================
+
+  const ipAddress =
+    primaryRecord?.ip ||
+    primaryIP ||
+    "Not available";
+
+
+  const hostname =
+    primaryRecord?.hostname ||
+    "Unknown";
+
+
+  const organization =
+    primaryRecord?.organization ||
+    "Unknown";
+
+
+  const asn =
+    primaryRecord?.asn ||
+    "N/A";
+
+
+  // ==========================================================
+  // CLASSIFICATION
+  // ==========================================================
+
+  const classification =
+    primaryRecord?.classification ||
+    {};
+
+
+  const classificationName =
+    classification?.classification ||
+    classification?.type ||
+    classification?.category ||
+    "Unknown";
+
+
+  const classificationReason =
+    classification?.reason ||
+    classification?.description ||
+    "No classification explanation available.";
+
+
+  // ==========================================================
+  // ANONYMIZATION
+  // ==========================================================
+
+  const anonymization =
+    primaryRecord?.anonymization ||
+    {};
+
+
+  const isTor =
+    anonymization?.tor === true;
+
+
+  const isVpn =
+    anonymization?.vpn === true;
+
+
+  const isProxy =
+    anonymization?.proxy === true;
+
+
+  // ==========================================================
+  // GEOLOCATION FIELDS
+  // ==========================================================
 
   const latitude = Number(
     geolocation?.latitude ??
-      geolocation?.lat ??
-      geolocation?.Latitude
+      geolocation?.lat
   );
+
 
   const longitude = Number(
     geolocation?.longitude ??
       geolocation?.lon ??
-      geolocation?.lng ??
-      geolocation?.Longitude
+      geolocation?.lng
   );
+
 
   const hasCoordinates =
     Number.isFinite(latitude) &&
     Number.isFinite(longitude);
 
+
   const position = hasCoordinates
     ? [latitude, longitude]
     : null;
 
-  // =========================================================
-  // LOCATION TEXT
-  // =========================================================
 
   const city =
     geolocation?.city ||
-    geolocation?.City ||
     "Unknown";
+
 
   const region =
     geolocation?.region ||
-    geolocation?.state ||
-    geolocation?.Region ||
     "Unknown";
+
 
   const country =
     geolocation?.country ||
-    geolocation?.country_name ||
-    geolocation?.Country ||
     "Unknown";
+
 
   const postal =
     geolocation?.postal ||
-    geolocation?.postal_code ||
-    geolocation?.zip ||
     "N/A";
+
 
   const timezone =
     geolocation?.timezone ||
-    geolocation?.time_zone ||
     "Unknown";
 
-  const continent =
-    geolocation?.continent ||
-    geolocation?.continent_name ||
-    "Unknown";
 
-  const continentCode =
-    geolocation?.continent_code ||
-    geolocation?.continentCode ||
-    "N/A";
-
-  const countryCode =
-    geolocation?.country_code ||
-    geolocation?.countryCode ||
-    "N/A";
-
-  const district = geolocation?.district || "N/A";
-
-  const isp = geolocation?.isp || "Unknown";
-
-  const organization =
-    geolocation?.organization ||
-    geolocation?.org ||
-    "Unknown";
-
-  const asn = geolocation?.asn || "N/A";
-
-  const asName =
-    geolocation?.as_name ||
-    geolocation?.asName ||
-    "N/A";
-
-  const isProxy =
-    typeof geolocation?.is_proxy === "boolean"
-      ? geolocation.is_proxy
-      : null;
-
-  const isHosting =
-    typeof geolocation?.is_hosting === "boolean"
-      ? geolocation.is_hosting
-      : null;
-
-  // =========================================================
+  // ==========================================================
   // LOADING
-  // =========================================================
+  // ==========================================================
 
   if (loading) {
+
     return (
+
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+
         <div className="text-center">
+
           <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto" />
 
           <p className="mt-4 text-slate-600 font-medium">
-            Tracing originating IP...
+            Loading IP forensic analysis...
           </p>
 
           <p className="text-sm text-slate-400 mt-1">
-            Extracting location from email forensic data
+            Reading cached email routing intelligence
           </p>
+
         </div>
+
       </div>
+
     );
   }
 
-  // =========================================================
+
+  // ==========================================================
   // ERROR
-  // =========================================================
+  // ==========================================================
 
   if (error) {
+
     return (
+
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6">
+
         <div className="max-w-lg w-full bg-white border border-red-200 rounded-2xl p-8 shadow-sm text-center">
+
           <div className="w-14 h-14 mx-auto rounded-full bg-red-100 flex items-center justify-center text-2xl">
             ⚠️
           </div>
 
           <h1 className="mt-5 text-xl font-bold text-slate-900">
-            IP Tracing Failed
+            IP Forensics Failed
           </h1>
 
           <p className="mt-2 text-slate-500">
@@ -266,49 +450,170 @@ function IPTracingPage() {
           <button
             onClick={() =>
               navigate(
-                `/analyzer?message_id=${encodeURIComponent(messageId)}`
+                `/analyzer?message_id=${encodeURIComponent(
+                  messageId || ""
+                )}`
               )
             }
             className="mt-6 px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700"
           >
             Back to Analyzer
           </button>
+
         </div>
+
       </div>
+
     );
   }
 
-  // =========================================================
+
+  // ==========================================================
+  // NO IP RECORDS
+  // ==========================================================
+
+  if (!ipRecords.length) {
+
+    return (
+
+      <div className="min-h-screen bg-slate-50">
+
+        <header className="bg-white border-b border-slate-200">
+
+          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+
+            <div className="flex items-center gap-3">
+
+              <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white text-xl">
+                🌐
+              </div>
+
+              <div>
+
+                <h1 className="text-lg font-bold">
+                  IP Tracing
+                </h1>
+
+                <p className="text-xs text-slate-500">
+                  Email routing & forensic analysis
+                </p>
+
+              </div>
+
+            </div>
+
+
+            <button
+              onClick={() =>
+                navigate(
+                  `/analyzer?message_id=${encodeURIComponent(
+                    messageId || ""
+                  )}`
+                )
+              }
+              className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold"
+            >
+              ← Analyzer
+            </button>
+
+          </div>
+
+        </header>
+
+
+        <main className="max-w-4xl mx-auto px-6 py-16">
+
+          <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center shadow-sm">
+
+            <div className="text-5xl">
+              🌐
+            </div>
+
+            <h2 className="mt-5 text-xl font-bold">
+              No observable IP address found
+            </h2>
+
+            <p className="mt-3 text-slate-500 leading-6">
+              No usable IP address was extracted from the
+              available email routing headers.
+            </p>
+
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+
+              <InfoCard
+                label="IPs Found"
+                value={summary?.total_ips_found ?? 0}
+                icon="🔢"
+              />
+
+              <InfoCard
+                label="Public IPs"
+                value={summary?.public_ips ?? 0}
+                icon="🌍"
+              />
+
+              <InfoCard
+                label="Private IPs"
+                value={summary?.private_ips ?? 0}
+                icon="🔒"
+              />
+
+            </div>
+
+          </div>
+
+        </main>
+
+      </div>
+
+    );
+  }
+
+
+  // ==========================================================
   // MAIN PAGE
-  // =========================================================
+  // ==========================================================
 
   return (
+
     <div className="min-h-screen bg-slate-50 text-slate-900">
 
-      {/* HEADER */}
+
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
+
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
+
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
 
           <div className="flex items-center gap-3">
+
             <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white text-xl shadow-sm">
               🌐
             </div>
 
             <div>
+
               <h1 className="text-lg font-bold">
                 IP Tracing
               </h1>
 
               <p className="text-xs text-slate-500">
-                Email origin & geolocation analysis
+                Email routing & forensic intelligence
               </p>
+
             </div>
+
           </div>
+
 
           <button
             onClick={() =>
               navigate(
-                `/analyzer?message_id=${encodeURIComponent(messageId)}`
+                `/analyzer?message_id=${encodeURIComponent(
+                  messageId || ""
+                )}`
               )
             }
             className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold"
@@ -317,26 +622,98 @@ function IPTracingPage() {
           </button>
 
         </div>
+
       </header>
+
 
       <main className="max-w-7xl mx-auto px-6 py-8">
 
-        {/* TITLE */}
+
+        {/* ====================================================
+            TITLE
+        ==================================================== */}
+
         <div className="mb-7">
+
           <p className="text-sm font-semibold text-blue-600">
             NETWORK FORENSICS
           </p>
 
           <h2 className="text-3xl font-bold mt-1">
-            Originating IP Location
+            Email IP Forensic Analysis
           </h2>
 
           <p className="text-slate-500 mt-2">
-            Location extracted from the cached forensic analysis. No new AI analysis is triggered here.
+            Observable routing infrastructure and IP intelligence
+            extracted from the email headers.
           </p>
+
         </div>
 
-        {/* IP CARD */}
+
+        {/* ====================================================
+            ORIGIN STATUS
+        ==================================================== */}
+
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
+
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+
+            <div>
+
+              <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">
+                Origin Analysis
+              </p>
+
+              <h3 className="text-xl font-bold text-slate-900 mt-1">
+                {originAnalysis?.origin_status ||
+                  "Unknown"}
+              </h3>
+
+              <p className="text-sm text-slate-500 mt-2 max-w-2xl">
+                The system reports the earliest observable
+                routing information. This does not automatically
+                establish the sender's physical location or identity.
+              </p>
+
+            </div>
+
+
+            <div className="flex flex-wrap gap-3">
+
+              <StatusBadge
+                label="Confidence"
+                value={
+                  originAnalysis?.confidence ||
+                  "Unknown"
+                }
+              />
+
+              <StatusBadge
+                label="IPs Found"
+                value={
+                  summary?.total_ips_found ?? 0
+                }
+              />
+
+              <StatusBadge
+                label="Public IPs"
+                value={
+                  summary?.public_ips ?? 0
+                }
+              />
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        {/* ====================================================
+            PRIMARY IP
+        ==================================================== */}
+
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
 
           <div className="flex items-center gap-4">
@@ -345,21 +722,51 @@ function IPTracingPage() {
               📡
             </div>
 
-            <div>
+            <div className="min-w-0">
+
               <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">
-                Origin IP Address
+                Earliest Observable IP
               </p>
 
-              <p className="text-2xl font-bold text-blue-700 font-mono mt-1">
-                {originIP}
+              <p className="text-2xl font-bold text-blue-700 font-mono mt-1 break-all">
+                {originAnalysis?.earliest_observable_ip ||
+                  "Not available"}
               </p>
+
             </div>
+
+          </div>
+
+
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <InfoCard
+              label="Original Sender IP"
+              value={
+                originAnalysis?.original_sender_ip ||
+                "Not established"
+              }
+              icon="👤"
+            />
+
+            <InfoCard
+              label="Origin Status"
+              value={
+                originAnalysis?.origin_status ||
+                "Unknown"
+              }
+              icon="🔎"
+            />
 
           </div>
 
         </div>
 
-        {/* LOCATION CARDS */}
+
+        {/* ====================================================
+            LOCATION CARDS
+        ==================================================== */}
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
 
           <InfoCard
@@ -388,36 +795,50 @@ function IPTracingPage() {
 
         </div>
 
-        {/* MAP */}
+
+        {/* ====================================================
+            MAP
+        ==================================================== */}
+
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
           <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
 
             <div>
+
               <h3 className="text-lg font-bold">
-                📍 Exact Geolocation
+                📍 IP Geolocation
               </h3>
 
               <p className="text-sm text-slate-500 mt-1">
-                Coordinates returned by the IP intelligence service
+                Approximate location associated with the observable IP.
               </p>
+
             </div>
 
+
             {hasCoordinates && (
+
               <div className="text-right">
+
                 <p className="text-xs text-slate-400">
                   Coordinates
                 </p>
 
                 <p className="font-mono text-sm font-semibold text-blue-700">
-                  {latitude.toFixed(6)}, {longitude.toFixed(6)}
+                  {latitude.toFixed(6)},{" "}
+                  {longitude.toFixed(6)}
                 </p>
+
               </div>
+
             )}
 
           </div>
 
+
           {hasCoordinates ? (
+
             <div className="h-[520px] w-full">
 
               <MapContainer
@@ -427,31 +848,50 @@ function IPTracingPage() {
                 className="h-full w-full"
               >
 
-                <MapController position={position} />
+                <MapController
+                  position={position}
+                />
+
 
                 <TileLayer
                   url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
                   maxZoom={19}
-                  attribution='&copy; OpenStreetMap contributors'
+                  attribution="&copy; OpenStreetMap contributors"
                 />
 
-                <Marker position={position}>
+
+                <Marker
+                  position={position}
+                >
 
                   <Popup>
+
                     <div className="text-sm">
-                      <strong>Originating IP</strong>
+
+                      <strong>
+                        Observable IP
+                      </strong>
+
                       <br />
-                      {originIP}
+
+                      {ipAddress}
+
                       <br />
                       <br />
+
                       {city}, {region}, {country}
+
                       <br />
+
                       {latitude.toFixed(6)},{" "}
                       {longitude.toFixed(6)}
+
                     </div>
+
                   </Popup>
 
                 </Marker>
+
 
                 <Circle
                   center={position}
@@ -466,7 +906,9 @@ function IPTracingPage() {
               </MapContainer>
 
             </div>
+
           ) : (
+
             <div className="h-[400px] flex items-center justify-center bg-slate-50">
 
               <div className="text-center">
@@ -480,93 +922,219 @@ function IPTracingPage() {
                 </h3>
 
                 <p className="text-slate-500 text-sm mt-2 max-w-md">
-                  The IP address was extracted, but the IP intelligence
-                  response did not contain usable latitude and longitude
-                  coordinates.
+                  IP intelligence did not provide usable
+                  latitude and longitude coordinates for the
+                  selected observable IP.
                 </p>
 
                 <div className="mt-4 px-4 py-3 bg-white border border-slate-200 rounded-xl inline-block">
+
                   <span className="text-xs text-slate-400">
                     IP
                   </span>
 
                   <p className="font-mono font-semibold text-blue-700">
-                    {originIP}
+                    {ipAddress}
                   </p>
+
                 </div>
 
               </div>
 
             </div>
+
           )}
 
         </div>
 
-        {/* NETWORK INTELLIGENCE */}
+
+        {/* ====================================================
+            NETWORK INTELLIGENCE
+        ==================================================== */}
+
         <div className="mt-6 bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+
           <div className="flex items-center justify-between mb-5">
+
             <div>
+
               <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
                 NETWORK INTELLIGENCE
               </p>
+
               <h3 className="text-xl font-bold text-slate-900 mt-1">
                 Provider & Infrastructure
               </h3>
+
               <p className="text-sm text-slate-500 mt-1">
-                Additional intelligence returned by the IP intelligence service.
+                Intelligence associated with the selected IP record.
               </p>
+
             </div>
+
 
             <div
               className={`px-3 py-1.5 rounded-full text-xs font-bold ${
-                isProxy === true
+                isTor
                   ? "bg-red-100 text-red-700"
-                  : isProxy === false
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-slate-100 text-slate-600"
+                  : isVpn
+                  ? "bg-orange-100 text-orange-700"
+                  : isProxy
+                  ? "bg-yellow-100 text-yellow-700"
+                  : "bg-emerald-100 text-emerald-700"
               }`}
             >
-              {isProxy === true
-                ? "⚠ Proxy detected"
-                : isProxy === false
-                ? "✓ No proxy detected"
-                : "Proxy status unknown"}
+
+              {isTor
+                ? "⚠ TOR detected"
+                : isVpn
+                ? "⚠ VPN indicator"
+                : isProxy
+                ? "⚠ Proxy indicator"
+                : "✓ No detected anonymization indicator"}
+
             </div>
+
           </div>
+
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <DetailRow label="Continent" value={`${continent} (${continentCode})`} />
-            <DetailRow label="Country Code" value={countryCode} />
-            <DetailRow label="District" value={district} />
-            <DetailRow label="ISP" value={isp} />
-            <DetailRow label="Organization" value={organization} />
-            <DetailRow label="ASN" value={asn} />
-            <DetailRow label="AS Name" value={asName} />
+
             <DetailRow
-              label="Hosting"
+              label="IP Address"
+              value={ipAddress}
+            />
+
+            <DetailRow
+              label="Hostname"
+              value={hostname}
+            />
+
+            <DetailRow
+              label="Organization"
+              value={organization}
+            />
+
+            <DetailRow
+              label="ASN"
+              value={asn}
+            />
+
+            <DetailRow
+              label="Classification"
+              value={classificationName}
+            />
+
+            <DetailRow
+              label="Header Position"
               value={
-                isHosting === true
-                  ? "Yes"
-                  : isHosting === false
-                  ? "No"
-                  : "Unknown"
+                primaryRecord?.header_index ??
+                "N/A"
               }
             />
+
           </div>
+
         </div>
 
-        {/* LOCATION DETAILS */}
+
+        {/* ====================================================
+            ANONYMIZATION
+        ==================================================== */}
+
+        <div className="mt-6 bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+
+          <div className="mb-5">
+
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
+              ANONYMIZATION ANALYSIS
+            </p>
+
+            <h3 className="text-xl font-bold text-slate-900 mt-1">
+              VPN / Proxy / TOR Indicators
+            </h3>
+
+            <p className="text-sm text-slate-500 mt-1">
+              Indicators associated with the selected observable IP.
+            </p>
+
+          </div>
+
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+            <BooleanCard
+              label="TOR"
+              value={isTor}
+            />
+
+            <BooleanCard
+              label="VPN"
+              value={isVpn}
+            />
+
+            <BooleanCard
+              label="Proxy"
+              value={isProxy}
+            />
+
+          </div>
+
+        </div>
+
+
+        {/* ====================================================
+            CLASSIFICATION
+        ==================================================== */}
+
+        <div className="mt-6 bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+
+          <div className="mb-5">
+
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
+              IP CLASSIFICATION
+            </p>
+
+            <h3 className="text-xl font-bold text-slate-900 mt-1">
+              Infrastructure Assessment
+            </h3>
+
+          </div>
+
+
+          <div className="grid md:grid-cols-2 gap-4">
+
+            <DetailRow
+              label="Classification"
+              value={classificationName}
+            />
+
+            <DetailRow
+              label="Reason"
+              value={classificationReason}
+            />
+
+          </div>
+
+        </div>
+
+
+        {/* ====================================================
+            LOCATION DETAILS
+        ==================================================== */}
+
         <div className="mt-6 bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
 
           <h3 className="text-lg font-bold mb-5">
             Location Details
           </h3>
 
+
           <div className="grid md:grid-cols-2 gap-4">
 
             <DetailRow
               label="IP Address"
-              value={originIP}
+              value={ipAddress}
             />
 
             <DetailRow
@@ -575,7 +1143,7 @@ function IPTracingPage() {
             />
 
             <DetailRow
-              label="Region / State"
+              label="Region"
               value={region}
             />
 
@@ -596,19 +1164,199 @@ function IPTracingPage() {
 
             <DetailRow
               label="Latitude"
-              value={hasCoordinates ? latitude : "Unavailable"}
+              value={
+                hasCoordinates
+                  ? latitude
+                  : "Unavailable"
+              }
             />
 
             <DetailRow
               label="Longitude"
-              value={hasCoordinates ? longitude : "Unavailable"}
+              value={
+                hasCoordinates
+                  ? longitude
+                  : "Unavailable"
+              }
             />
 
           </div>
 
         </div>
 
-        {/* NAVIGATION */}
+
+        {/* ====================================================
+            ALL OBSERVABLE IPs
+        ==================================================== */}
+
+        <div className="mt-6 bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
+
+          <div className="mb-5">
+
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
+              ROUTING PATH
+            </p>
+
+            <h3 className="text-xl font-bold text-slate-900 mt-1">
+              Observable IP Records
+            </h3>
+
+            <p className="text-sm text-slate-500 mt-1">
+              IP addresses extracted from the available email routing headers.
+            </p>
+
+          </div>
+
+
+          <div className="space-y-4">
+
+            {ipRecords.map(
+              (record, index) => {
+
+                const recordGeo =
+                  record?.geolocation ||
+                  {};
+
+                const recordClass =
+                  record?.classification ||
+                  {};
+
+                const recordAnon =
+                  record?.anonymization ||
+                  {};
+
+                return (
+
+                  <div
+                    key={`${record?.ip || "ip"}-${index}`}
+                    className="border border-slate-200 rounded-xl p-5 hover:border-blue-200 transition"
+                  >
+
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+
+                      <div className="min-w-0">
+
+                        <div className="flex items-center gap-3">
+
+                          <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
+                            📡
+                          </div>
+
+                          <div>
+
+                            <p className="text-xs text-slate-400 font-semibold">
+                              ROUTING HOP {index + 1}
+                            </p>
+
+                            <p className="font-mono font-bold text-blue-700 break-all">
+                              {record?.ip || "Unknown"}
+                            </p>
+
+                          </div>
+
+                        </div>
+
+                      </div>
+
+
+                      <div className="flex flex-wrap gap-2">
+
+                        <SmallBadge
+                          label={
+                            record?.type ||
+                            "UNKNOWN"
+                          }
+                        />
+
+                        <SmallBadge
+                          label={
+                            recordClass?.classification ||
+                            recordClass?.type ||
+                            "UNKNOWN"
+                          }
+                        />
+
+                        {recordAnon?.tor === true && (
+                          <SmallBadge
+                            label="TOR"
+                            danger
+                          />
+                        )}
+
+                        {recordAnon?.vpn === true && (
+                          <SmallBadge
+                            label="VPN"
+                            danger
+                          />
+                        )}
+
+                        {recordAnon?.proxy === true && (
+                          <SmallBadge
+                            label="PROXY"
+                            danger
+                          />
+                        )}
+
+                      </div>
+
+                    </div>
+
+
+                    <div className="mt-4 grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+
+                      <MiniDetail
+                        label="Hostname"
+                        value={
+                          record?.hostname ||
+                          "Unknown"
+                        }
+                      />
+
+                      <MiniDetail
+                        label="Organization"
+                        value={
+                          record?.organization ||
+                          "Unknown"
+                        }
+                      />
+
+                      <MiniDetail
+                        label="ASN"
+                        value={
+                          record?.asn ||
+                          "N/A"
+                        }
+                      />
+
+                      <MiniDetail
+                        label="Location"
+                        value={[
+                          recordGeo?.city,
+                          recordGeo?.country,
+                        ]
+                          .filter(Boolean)
+                          .join(", ") ||
+                          "Unknown"}
+                      />
+
+                    </div>
+
+                  </div>
+
+                );
+
+              }
+            )}
+
+          </div>
+
+        </div>
+
+
+        {/* ====================================================
+            NAVIGATION
+        ==================================================== */}
+
         <div className="mt-8 grid md:grid-cols-3 gap-4">
 
           <NavigationCard
@@ -617,10 +1365,13 @@ function IPTracingPage() {
             icon="🔍"
             onClick={() =>
               navigate(
-                `/analyzer?message_id=${encodeURIComponent(messageId)}`
+                `/analyzer?message_id=${encodeURIComponent(
+                  messageId || ""
+                )}`
               )
             }
           />
+
 
           <NavigationCard
             title="Phishing Detection"
@@ -628,10 +1379,13 @@ function IPTracingPage() {
             icon="🎣"
             onClick={() =>
               navigate(
-                `/phishing?message_id=${encodeURIComponent(messageId)}`
+                `/phishing?message_id=${encodeURIComponent(
+                  messageId || ""
+                )}`
               )
             }
           />
+
 
           <NavigationCard
             title="Social Engineering"
@@ -639,7 +1393,9 @@ function IPTracingPage() {
             icon="👥"
             onClick={() =>
               navigate(
-                `/social?message_id=${encodeURIComponent(messageId)}`
+                `/social?message_id=${encodeURIComponent(
+                  messageId || ""
+                )}`
               )
             }
           />
@@ -647,17 +1403,25 @@ function IPTracingPage() {
         </div>
 
       </main>
+
     </div>
+
   );
 }
 
 
-// =========================================================
-// COMPONENTS
-// =========================================================
+// ============================================================
+// INFO CARD
+// ============================================================
 
-function InfoCard({ label, value, icon }) {
+function InfoCard({
+  label,
+  value,
+  icon,
+}) {
+
   return (
+
     <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
 
       <div className="flex items-center gap-3">
@@ -667,24 +1431,106 @@ function InfoCard({ label, value, icon }) {
         </div>
 
         <div className="min-w-0">
+
           <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">
             {label}
           </p>
 
-          <p className="font-semibold text-slate-800 truncate mt-1">
+          <p className="font-semibold text-slate-800 break-all mt-1">
             {value}
           </p>
+
         </div>
 
       </div>
 
     </div>
+
   );
 }
 
 
-function DetailRow({ label, value }) {
+// ============================================================
+// STATUS BADGE
+// ============================================================
+
+function StatusBadge({
+  label,
+  value,
+}) {
+
   return (
+
+    <div className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200">
+
+      <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">
+        {label}
+      </p>
+
+      <p className="text-sm font-bold text-slate-800 mt-0.5">
+        {value}
+      </p>
+
+    </div>
+
+  );
+}
+
+
+// ============================================================
+// BOOLEAN CARD
+// ============================================================
+
+function BooleanCard({
+  label,
+  value,
+}) {
+
+  return (
+
+    <div
+      className={`rounded-xl border p-4 ${
+        value
+          ? "bg-red-50 border-red-200"
+          : "bg-emerald-50 border-emerald-200"
+      }`}
+    >
+
+      <div className="flex items-center justify-between">
+
+        <span className="text-sm font-semibold text-slate-700">
+          {label}
+        </span>
+
+        <span
+          className={`px-3 py-1 rounded-full text-xs font-bold ${
+            value
+              ? "bg-red-100 text-red-700"
+              : "bg-emerald-100 text-emerald-700"
+          }`}
+        >
+          {value ? "Detected" : "Not detected"}
+        </span>
+
+      </div>
+
+    </div>
+
+  );
+}
+
+
+// ============================================================
+// DETAIL ROW
+// ============================================================
+
+function DetailRow({
+  label,
+  value,
+}) {
+
+  return (
+
     <div className="bg-slate-50 rounded-xl px-4 py-3">
 
       <p className="text-xs text-slate-400 font-semibold uppercase">
@@ -692,13 +1538,71 @@ function DetailRow({ label, value }) {
       </p>
 
       <p className="mt-1 text-sm font-semibold text-slate-800 break-all">
-        {value}
+        {value || "Not available"}
       </p>
 
     </div>
+
   );
 }
 
+
+// ============================================================
+// MINI DETAIL
+// ============================================================
+
+function MiniDetail({
+  label,
+  value,
+}) {
+
+  return (
+
+    <div className="bg-slate-50 rounded-lg px-3 py-2.5">
+
+      <p className="text-[10px] text-slate-400 uppercase font-semibold">
+        {label}
+      </p>
+
+      <p className="mt-1 text-xs font-semibold text-slate-700 break-all">
+        {value || "Unknown"}
+      </p>
+
+    </div>
+
+  );
+}
+
+
+// ============================================================
+// SMALL BADGE
+// ============================================================
+
+function SmallBadge({
+  label,
+  danger = false,
+}) {
+
+  return (
+
+    <span
+      className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+        danger
+          ? "bg-red-100 text-red-700"
+          : "bg-slate-100 text-slate-600"
+      }`}
+    >
+      {label}
+    </span>
+
+  );
+
+}
+
+
+// ============================================================
+// NAVIGATION CARD
+// ============================================================
 
 function NavigationCard({
   title,
@@ -706,7 +1610,9 @@ function NavigationCard({
   icon,
   onClick,
 }) {
+
   return (
+
     <button
       onClick={onClick}
       className="text-left bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:border-blue-300 hover:shadow-md transition"
@@ -719,6 +1625,7 @@ function NavigationCard({
         </div>
 
         <div>
+
           <h3 className="font-bold text-slate-900">
             {title}
           </h3>
@@ -726,12 +1633,17 @@ function NavigationCard({
           <p className="text-sm text-slate-500 mt-1">
             {description}
           </p>
+
         </div>
 
       </div>
 
     </button>
+
   );
+
 }
 
+
 export default IPTracingPage;
+

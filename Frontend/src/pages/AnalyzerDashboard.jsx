@@ -156,7 +156,15 @@ export default function AnalyzerDashboard() {
   const reasons = Array.isArray(ai?.reasons) ? ai.reasons : [];
   const email = result?.email || result?.email_data || {};
   const authentication = email?.authentication || {};
-  const ip = result?.ip_tracing || {};
+  const ipForensics = result?.ip_tracing?.ip_forensics || {};
+
+const ipSummary = ipForensics?.summary || {};
+
+const originAnalysis = ipForensics?.origin_analysis || {};
+
+const ipRecords = Array.isArray(ipForensics?.ip_records)
+  ? ipForensics.ip_records
+  : [];
 
   const threatScore = Number(
     detection?.threat_score ??
@@ -260,9 +268,28 @@ export default function AnalyzerDashboard() {
     features?.credential_count ?? 0
   );
 
-  const ipAddress = ip?.ip || email?.origin_ip || "Not available";
-  const country = ip?.country || email?.geolocation?.country || "Not available";
-  const city = ip?.city || email?.geolocation?.city || "Not available";
+const ipAddress =
+  originAnalysis?.original_sender_ip ||
+  originAnalysis?.earliest_observable_ip ||
+  ipSummary?.earliest_observable_ip ||
+  "Not available";
+
+const firstIpRecord =
+  ipRecords.find(
+    (record) => record?.ip === ipAddress
+  ) ||
+  ipRecords[0] ||
+  {};
+
+const country =
+  firstIpRecord?.geolocation?.country ||
+  originAnalysis?.geolocation?.country ||
+  "Not available";
+
+const city =
+  firstIpRecord?.geolocation?.city ||
+  originAnalysis?.geolocation?.city ||
+  "Not available";
 
   const detectionPrediction =
     detection?.prediction ||
@@ -459,16 +486,55 @@ export default function AnalyzerDashboard() {
             <InfoRow label="Message ID" value={email?.message_id} mono />
           </InfoPanel>
 
-          <InfoPanel
-            className="xl:col-span-3"
-            icon="●"
-            title="IP Information"
-          >
-            <InfoRow label="Origin IP" value={ipAddress} mono />
-            <InfoRow label="Location" value={country} />
-            <InfoRow label="City" value={city} />
-          </InfoPanel>
+<InfoPanel
+  className="xl:col-span-3"
+  icon="●"
+  title="IP Information"
+>
+  <InfoRow
+    label="Original Sender IP"
+    value={
+      originAnalysis?.original_sender_ip ||
+      "Not established"
+    }
+    mono
+  />
 
+  <InfoRow
+    label="Earliest Observable IP"
+    value={
+      originAnalysis?.earliest_observable_ip ||
+      "Not available"
+    }
+    mono
+  />
+
+  <InfoRow
+    label="Location"
+    value={country}
+  />
+
+  <InfoRow
+    label="City"
+    value={city}
+  />
+
+  <InfoRow
+    label="Status"
+    value={
+      originAnalysis?.origin_status ||
+      "Unknown"
+    }
+  />
+
+  <InfoRow
+    label="Confidence"
+    value={
+      originAnalysis?.confidence ||
+      "Unknown"
+    }
+  />
+</InfoPanel>
           <InfoPanel
             className="xl:col-span-4"
             icon="▤"
