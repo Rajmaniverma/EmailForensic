@@ -624,7 +624,7 @@ export default function AnalyzerDashboard() {
               <div className="space-y-3">
                 {reasons.map((reason, index) => {
                   const positive =
-                    /no request|no fake|no suspicious|no phishing/i.test(
+                    / no_request|no_fake|no_suspicious|no_phishing/i.test(
                       String(reason)
                     );
 

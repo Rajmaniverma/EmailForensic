@@ -21,14 +21,14 @@ from Gmail_Auth import SCOPES
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from sqlalchemy.orm import Session
-
+from IPForensic.ip_forensics_service import analyze_ip_forensics
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from Detection_engine import analyze_email
 from Database import get_db
 from DBmodel import GmailAccount, GmailMessage
 from Phishing import Phising_email
-from Gmail_Parser import (
+from Gmail_parser import (
     parse_gmail_message,
     convert_gmail_to_email_data
 )
@@ -669,18 +669,12 @@ def full_analysis(
             return {"error": str(e)}
 
     def run_ip():
-        try:
-            origin_ip = email_data.get("origin_ip")
-
-            if origin_ip:
-                return get_ip_intelligence(origin_ip)
-
-            return {
-                "message": "Origin IP not found"
-            }
-
-        except Exception as e:
-            return {"error": str(e)}
+           try:
+              return analyze_ip_forensics(email_data)
+           except Exception as e:
+               return {
+                   "error": str(e)
+                }
 
     # Run simultaneously
     with ThreadPoolExecutor(max_workers=4) as executor:
