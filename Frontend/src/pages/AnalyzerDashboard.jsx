@@ -153,7 +153,7 @@ export default function AnalyzerDashboard() {
   const ai = detection?.ai_analysis || {};
 
   // Detection reasons returned by the backend.
-  const reasons = Array.isArray(ai?.reasons) || [];
+  const reasons = Array.isArray(ai?.reasons) ? ai.reasons : [];
   const email = result?.email || result?.email_data || {};
   const authentication = email?.authentication || {};
   const ip = result?.ip_tracing || {};
