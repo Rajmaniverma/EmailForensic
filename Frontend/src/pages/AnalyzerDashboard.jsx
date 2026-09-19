@@ -707,10 +707,10 @@ const city =
                         className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-bold ${
                           positive
                             ? "bg-[#e6f4ea] text-[#137333]"
-                            : "bg-[#fef0c7] text-[#b06000]"
+                            : "bg-[#e6f4ea] text-[#137333]"
                         }`}
                       >
-                        {positive ? "✓" : "!"}
+                        {positive ? "✓" : "🔸"}
                       </div>
 
                       <div className="min-w-0">
