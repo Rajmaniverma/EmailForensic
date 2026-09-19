@@ -307,12 +307,33 @@ function IPTracingPage() {
     {};
 
 
+  // Backend can return classification as:
+  // {
+  //   ip_type: "PUBLIC",
+  //   role: "POSSIBLE_ORIGIN",
+  //   origin_candidate: true,
+  //   reason: "..."
+  // }
+  // Older responses may use classification/type/category.
   const classificationName =
     classification?.classification ||
+    classification?.ip_type ||
     classification?.type ||
     classification?.category ||
     "Unknown";
 
+  const classificationType =
+    classification?.ip_type ||
+    classification?.type ||
+    classification?.category ||
+    "Unknown";
+
+  const classificationRole =
+    classification?.role ||
+    "Unknown";
+
+  const originCandidate =
+    classification?.origin_candidate === true;
 
   const classificationReason =
     classification?.reason ||
@@ -323,22 +344,84 @@ function IPTracingPage() {
   // ==========================================================
   // ANONYMIZATION
   // ==========================================================
+  // IMPORTANT:
+  // Backend returns tor/vpn/proxy as OBJECTS, not booleans:
+  //
+  // tor: {
+  //   is_tor: false,
+  //   status: "NOT_IDENTIFIED_AS_TOR",
+  //   confidence: "LOW"
+  // }
+  //
+  // The helper below also supports a boolean response so the UI
+  // remains compatible with older backend responses.
 
   const anonymization =
     primaryRecord?.anonymization ||
     {};
 
+  const getIndicator = (value, key) => {
+    if (typeof value === "boolean") {
+      return {
+        detected: value,
+        status: value ? `DETECTED_${key.toUpperCase()}` : `NOT_DETECTED_${key.toUpperCase()}`,
+        confidence: "N/A",
+      };
+    }
 
-  const isTor =
-    anonymization?.tor === true;
+    if (!value || typeof value !== "object") {
+      return {
+        detected: false,
+        status: "NOT_AVAILABLE",
+        confidence: "N/A",
+      };
+    }
 
+    return {
+      detected:
+        value?.[`is_${key}`] === true ||
+        value?.detected === true ||
+        value?.is_detected === true,
+      status:
+        value?.status ||
+        (value?.[`is_${key}`] === true
+          ? `DETECTED_${key.toUpperCase()}`
+          : `NOT_IDENTIFIED_AS_${key.toUpperCase()}`),
+      confidence: value?.confidence || "N/A",
+      ip: value?.ip || primaryRecord?.ip || "N/A",
+    };
+  };
 
-  const isVpn =
-    anonymization?.vpn === true;
+  const torInfo = getIndicator(anonymization?.tor, "tor");
+  const vpnInfo = getIndicator(anonymization?.vpn, "vpn");
+  const proxyInfo = getIndicator(anonymization?.proxy, "proxy");
 
+  const isTor = torInfo.detected;
+  const isVpn = vpnInfo.detected;
+  const isProxy = proxyInfo.detected;
 
-  const isProxy =
-    anonymization?.proxy === true;
+  // Show every indicator explicitly. This is more useful for
+  // forensic review than only showing a boolean.
+  const detectedAnonymization = [
+    isTor && "TOR",
+    isVpn && "VPN",
+    isProxy && "PROXY",
+  ].filter(Boolean);
+
+  // Derive counts from all observable IP records when the backend
+  // summary does not provide them.
+  const derivedAnonymizationCounts = useMemo(() => {
+    return ipRecords.reduce(
+      (acc, record) => {
+        const a = record?.anonymization || {};
+        if (getIndicator(a?.tor, "tor").detected) acc.tor += 1;
+        if (getIndicator(a?.vpn, "vpn").detected) acc.vpn += 1;
+        if (getIndicator(a?.proxy, "proxy").detected) acc.proxy += 1;
+        return acc;
+      },
+      { tor: 0, vpn: 0, proxy: 0 }
+    );
+  }, [ipRecords]);
 
 
   // ==========================================================
@@ -762,6 +845,79 @@ function IPTracingPage() {
 
         </div>
 
+        {/* ====================================================
+            ORIGIN EVIDENCE
+        ==================================================== */}
+
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
+
+          <div className="mb-5">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-600">
+              ORIGIN EVIDENCE
+            </p>
+
+            <h3 className="text-xl font-bold text-slate-900 mt-1">
+              Why this IP was selected
+            </h3>
+
+            <p className="text-sm text-slate-500 mt-1">
+              This section exposes the backend's origin-classification evidence
+              instead of hiding it behind a single label.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+            <DetailRow
+              label="Original Sender IP"
+              value={originAnalysis?.original_sender_ip || "Not established"}
+            />
+
+            <DetailRow
+              label="Earliest Observable IP"
+              value={originAnalysis?.earliest_observable_ip || "Not available"}
+            />
+
+            <DetailRow
+              label="Origin Status"
+              value={originAnalysis?.origin_status || "Unknown"}
+            />
+
+            <DetailRow
+              label="Origin Confidence"
+              value={originAnalysis?.confidence || "Unknown"}
+            />
+
+            <DetailRow
+              label="Origin Candidate"
+              value={originCandidate ? "Yes" : "No"}
+            />
+
+            <DetailRow
+              label="Candidate Role"
+              value={classificationRole}
+            />
+
+          </div>
+
+          <div className="mt-4 bg-blue-50 border border-blue-100 rounded-xl p-4">
+            <p className="text-xs text-blue-700 font-bold uppercase">
+              Evidence / Reason
+            </p>
+
+            <p className="mt-1 text-sm text-slate-700">
+              {classificationReason}
+            </p>
+
+            <p className="mt-2 text-xs text-slate-500">
+              An observable IP is not automatically the sender's physical
+              device IP. Mail relays, gateways, NAT, VPNs, proxies and other
+              infrastructure can appear in the routing chain.
+            </p>
+          </div>
+
+        </div>
+
 
         {/* ====================================================
             LOCATION CARDS
@@ -975,24 +1131,14 @@ function IPTracingPage() {
 
             <div
               className={`px-3 py-1.5 rounded-full text-xs font-bold ${
-                isTor
+                detectedAnonymization.length
                   ? "bg-red-100 text-red-700"
-                  : isVpn
-                  ? "bg-orange-100 text-orange-700"
-                  : isProxy
-                  ? "bg-yellow-100 text-yellow-700"
                   : "bg-emerald-100 text-emerald-700"
               }`}
             >
-
-              {isTor
-                ? "⚠ TOR detected"
-                : isVpn
-                ? "⚠ VPN indicator"
-                : isProxy
-                ? "⚠ Proxy indicator"
+              {detectedAnonymization.length
+                ? `⚠ ${detectedAnonymization.join(" / ")} detected`
                 : "✓ No detected anonymization indicator"}
-
             </div>
 
           </div>
@@ -1021,16 +1167,28 @@ function IPTracingPage() {
             />
 
             <DetailRow
+              label="IP Type"
+              value={classificationType}
+            />
+
+            <DetailRow
               label="Classification"
               value={classificationName}
             />
 
             <DetailRow
+              label="Role"
+              value={classificationRole}
+            />
+
+            <DetailRow
+              label="Origin Candidate"
+              value={originCandidate ? "Yes" : "No"}
+            />
+
+            <DetailRow
               label="Header Position"
-              value={
-                primaryRecord?.header_index ??
-                "N/A"
-              }
+              value={primaryRecord?.header_index ?? "N/A"}
             />
 
           </div>
@@ -1063,21 +1221,89 @@ function IPTracingPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-            <BooleanCard
+            <AnonymizationCard
               label="TOR"
-              value={isTor}
+              icon="🧅"
+              info={torInfo}
             />
 
-            <BooleanCard
+            <AnonymizationCard
               label="VPN"
-              value={isVpn}
+              icon="🛡️"
+              info={vpnInfo}
             />
 
-            <BooleanCard
+            <AnonymizationCard
               label="Proxy"
-              value={isProxy}
+              icon="🔀"
+              info={proxyInfo}
             />
 
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <MiniDetail
+              label="TOR Status"
+              value={torInfo.status}
+            />
+
+            <MiniDetail
+              label="VPN Status"
+              value={vpnInfo.status}
+            />
+
+            <MiniDetail
+              label="Proxy Status"
+              value={proxyInfo.status}
+            />
+
+            <MiniDetail
+              label="TOR Confidence"
+              value={torInfo.confidence}
+            />
+
+            <MiniDetail
+              label="VPN Confidence"
+              value={vpnInfo.confidence}
+            />
+
+            <MiniDetail
+              label="Proxy Confidence"
+              value={proxyInfo.confidence}
+            />
+          </div>
+
+          <div className="mt-5 bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <p className="text-xs text-slate-400 uppercase font-semibold">
+              Detection Interpretation
+            </p>
+            <p className="mt-1 text-sm text-slate-700">
+              {detectedAnonymization.length
+                ? `Detected indicators: ${detectedAnonymization.join(", ")}.`
+                : "No TOR, VPN, or proxy indicator was identified for this observable IP."}
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              Detection status is based on the intelligence returned for the
+              selected observable IP. A "not identified" result does not prove
+              that anonymization was never used.
+            </p>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <StatusBadge
+              label="TOR across routing"
+              value={summary?.tor_detected ?? derivedAnonymizationCounts.tor}
+            />
+
+            <StatusBadge
+              label="VPN across routing"
+              value={summary?.vpn_detected ?? derivedAnonymizationCounts.vpn}
+            />
+
+            <StatusBadge
+              label="Proxy across routing"
+              value={summary?.proxy_detected ?? derivedAnonymizationCounts.proxy}
+            />
           </div>
 
         </div>
@@ -1107,6 +1333,21 @@ function IPTracingPage() {
             <DetailRow
               label="Classification"
               value={classificationName}
+            />
+
+            <DetailRow
+              label="IP Type"
+              value={classificationType}
+            />
+
+            <DetailRow
+              label="Role"
+              value={classificationRole}
+            />
+
+            <DetailRow
+              label="Origin Candidate"
+              value={originCandidate ? "Yes" : "No"}
             />
 
             <DetailRow
@@ -1271,26 +1512,28 @@ function IPTracingPage() {
                         <SmallBadge
                           label={
                             recordClass?.classification ||
+                            recordClass?.ip_type ||
                             recordClass?.type ||
+                            recordClass?.category ||
                             "UNKNOWN"
                           }
                         />
 
-                        {recordAnon?.tor === true && (
+                        {getIndicator(recordAnon?.tor, "tor").detected && (
                           <SmallBadge
                             label="TOR"
                             danger
                           />
                         )}
 
-                        {recordAnon?.vpn === true && (
+                        {getIndicator(recordAnon?.vpn, "vpn").detected && (
                           <SmallBadge
                             label="VPN"
                             danger
                           />
                         )}
 
-                        {recordAnon?.proxy === true && (
+                        {getIndicator(recordAnon?.proxy, "proxy").detected && (
                           <SmallBadge
                             label="PROXY"
                             danger
@@ -1329,14 +1572,68 @@ function IPTracingPage() {
                       />
 
                       <MiniDetail
+                        label="IP Type"
+                        value={
+                          recordClass?.ip_type ||
+                          record?.type ||
+                          "Unknown"
+                        }
+                      />
+
+                      <MiniDetail
+                        label="Role"
+                        value={
+                          recordClass?.role ||
+                          "Unknown"
+                        }
+                      />
+
+                      <MiniDetail
                         label="Location"
                         value={[
                           recordGeo?.city,
+                          recordGeo?.region,
                           recordGeo?.country,
                         ]
                           .filter(Boolean)
                           .join(", ") ||
                           "Unknown"}
+                      />
+
+                      <MiniDetail
+                        label="TOR"
+                        value={
+                          getIndicator(recordAnon?.tor, "tor").detected
+                            ? "Detected"
+                            : getIndicator(recordAnon?.tor, "tor").status
+                        }
+                      />
+
+                      <MiniDetail
+                        label="VPN"
+                        value={
+                          getIndicator(recordAnon?.vpn, "vpn").detected
+                            ? "Detected"
+                            : getIndicator(recordAnon?.vpn, "vpn").status
+                        }
+                      />
+
+                      <MiniDetail
+                        label="Proxy"
+                        value={
+                          getIndicator(recordAnon?.proxy, "proxy").detected
+                            ? "Detected"
+                            : getIndicator(recordAnon?.proxy, "proxy").status
+                        }
+                      />
+
+                      <MiniDetail
+                        label="Classification Reason"
+                        value={
+                          recordClass?.reason ||
+                          recordClass?.description ||
+                          "Not available"
+                        }
                       />
 
                     </div>
@@ -1473,6 +1770,92 @@ function StatusBadge({
 
     </div>
 
+  );
+}
+
+
+// ============================================================
+// ANONYMIZATION CARD
+// ============================================================
+
+function AnonymizationCard({
+  label,
+  icon,
+  info,
+}) {
+
+  const detected = info?.detected === true;
+
+  return (
+    <div
+      className={`rounded-2xl border p-5 ${
+        detected
+          ? "bg-red-50 border-red-200"
+          : "bg-emerald-50 border-emerald-200"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl ${
+              detected
+                ? "bg-red-100"
+                : "bg-emerald-100"
+            }`}
+          >
+            {icon}
+          </div>
+
+          <div>
+            <p className="text-sm font-bold text-slate-800">
+              {label}
+            </p>
+
+            <p
+              className={`text-xs font-semibold mt-1 ${
+                detected
+                  ? "text-red-700"
+                  : "text-emerald-700"
+              }`}
+            >
+              {detected ? "Detected" : "Not detected"}
+            </p>
+          </div>
+        </div>
+
+        <span
+          className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+            detected
+              ? "bg-red-100 text-red-700"
+              : "bg-emerald-100 text-emerald-700"
+          }`}
+        >
+          {info?.confidence || "N/A"}
+        </span>
+
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <div>
+          <p className="text-[10px] text-slate-400 uppercase font-semibold">
+            Status
+          </p>
+          <p className="text-xs font-semibold text-slate-700 break-all mt-0.5">
+            {info?.status || "Not available"}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-[10px] text-slate-400 uppercase font-semibold">
+            IP Checked
+          </p>
+          <p className="text-xs font-mono font-semibold text-slate-700 break-all mt-0.5">
+            {info?.ip || "N/A"}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
