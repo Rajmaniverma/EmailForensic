@@ -700,7 +700,7 @@ const city =
                       className={`flex items-start gap-3 rounded-xl border p-4 ${
                         positive
                           ? "bg-[#f8fbfd] border-[#e3ebf5]"
-                          : "bg-[#f8fbfd] border-[#e3ebf5]
+                          : "bg-[#f8fbfd] border-[#e3ebf5]"
                       }`}
                     >
                       <div
