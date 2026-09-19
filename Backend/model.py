@@ -34,29 +34,75 @@ class EmailTextAnalysis(BaseModel):
     risk_level: str
     reasons: List[str]
 
+
+
 class SocialEngineeringAnalysis(BaseModel):
+    # Psychological
     urgency: bool
     authority_impersonation: bool
     fear: bool
     reward: bool
     secrecy: bool
+    scarcity: bool
+    pressure: bool
+    trust_exploitation: bool
+    relationship_exploitation: bool
+    curiosity_exploitation: bool
+    reciprocity: bool
+    social_pressure: bool
 
+    # Sensitive information
+    sensitive_data_target: SensitiveDataTarget
+
+    # Financial
+    money_transfer_request: bool
+    payment_request: bool
+    refund_manipulation: bool
+    investment_lure: bool
+    financial_benefit_lure: bool
+    banking_action_request: bool
+
+    # Actions
+    suspicious_link_request: bool
+    attachment_request: bool
+    download_request: bool
+    software_installation_request: bool
+    login_request: bool
+    account_verification_request: bool
+    information_submission_request: bool
+    call_request: bool
+    callback_request: bool
+    reply_request: bool
+
+    # Impersonation
+    executive_impersonation: bool
+    bank_impersonation: bool
+    government_impersonation: bool
+    company_impersonation: bool
+    it_support_impersonation: bool
+    law_enforcement_impersonation: bool
+    colleague_impersonation: bool
+    friend_or_family_impersonation: bool
+
+    # Context
+    unusual_request: bool
+    verification_bypass: bool
+    isolation_from_verification: bool
+    confidentiality_request: bool
+    suspicious_identity_claim: bool
+
+    # Overall
     detected: bool
-
     techniques: List[str]
-
     explanation: str
-
     evidence: List[str]
-
     risk_impact: str
-
     recommendation: str
 
-    social_engineering_score: int = Field(ge=0, le=100)
-
-
-
+    social_engineering_score: int = Field(
+        ge=0,
+        le=100
+    )
 
 class Phising_indicate(BaseModel):
 
@@ -91,3 +137,8 @@ class Phising_indicate(BaseModel):
     suspicious_redirects_data: bool | None = None
 
     Explanation: str | None = None
+
+class SensitiveDataTarget(BaseModel):
+    detected: bool
+    categories: List[str]
+    evidence: List[str]
