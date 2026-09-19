@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 const API_URL = "https://emailforensic.onrender.com";
 
@@ -6,6 +6,7 @@ const SocialPage = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
     const fetchSocial = async () => {
@@ -28,9 +29,7 @@ const SocialPage = () => {
         }
 
         const response = await fetch(
-          `${API_URL}/gmail/full-analysis/${encodeURIComponent(
-            messageId
-          )}`,
+          `${API_URL}/gmail/full-analysis/${encodeURIComponent(messageId)}`,
           {
             method: "GET",
             headers: {
@@ -61,8 +60,16 @@ const SocialPage = () => {
           );
         }
 
-        setData(socialData);
-
+        /*
+         * IMPORTANT:
+         * We keep the complete analysis object because the page
+         * also uses phishing score, legitimate score, IP status,
+         * message ID and email information.
+         */
+        setData({
+          social: socialData,
+          full: result.data,
+        });
       } catch (error) {
         console.error("Social Error:", error);
 
@@ -78,494 +85,1338 @@ const SocialPage = () => {
     fetchSocial();
   }, []);
 
-  // ==========================================
+  // ============================================================
   // LOADING
-  // ==========================================
+  // ============================================================
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f5f8fc] flex items-center justify-center">
+      <div className="min-h-screen bg-[#f4f7fb] flex items-center justify-center">
         <div className="text-center">
+          <div className="relative mx-auto w-20 h-20">
+            <div className="absolute inset-0 rounded-full border-[5px] border-blue-100" />
 
-          <div className="relative mx-auto w-16 h-16 mb-5">
-            <div className="absolute inset-0 rounded-full border-4 border-[#dbeafe]" />
+            <div className="absolute inset-0 rounded-full border-[5px] border-transparent border-t-blue-600 animate-spin" />
 
-            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[#1a73e8] animate-spin" />
-
-            <div className="absolute inset-0 flex items-center justify-center text-xl">
-              🛡️
+            <div className="absolute inset-0 flex items-center justify-center text-2xl">
+              🧠
             </div>
           </div>
 
-          <h1 className="text-xl font-semibold text-[#202124]">
+          <h1 className="mt-6 text-xl font-bold text-slate-900">
             Analyzing Social Engineering
           </h1>
 
-          <p className="mt-2 text-sm text-[#6b7280]">
-            Loading security intelligence...
+          <p className="mt-2 text-sm text-slate-500">
+            Processing behavioral threat intelligence...
           </p>
-
         </div>
       </div>
     );
   }
 
-  // ==========================================
+  // ============================================================
   // ERROR
-  // ==========================================
+  // ============================================================
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#f5f8fc] flex items-center justify-center p-6">
-
-        <div className="max-w-md w-full bg-white rounded-2xl border border-[#e5e7eb] shadow-sm p-8 text-center">
-
-          <div className="w-14 h-14 mx-auto rounded-full bg-[#fce8e6] flex items-center justify-center text-2xl">
+      <div className="min-h-screen bg-[#f4f7fb] flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-3xl border border-red-100 bg-white p-8 text-center shadow-xl shadow-slate-200/50">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-3xl">
             ⚠️
           </div>
 
-          <h1 className="mt-4 text-xl font-semibold text-[#202124]">
+          <h1 className="mt-5 text-xl font-bold text-slate-900">
             Analysis Unavailable
           </h1>
 
-          <p className="mt-2 text-sm text-[#6b7280]">
+          <p className="mt-2 text-sm leading-6 text-slate-500">
             {error}
           </p>
 
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-6 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+          >
+            Retry Analysis
+          </button>
         </div>
-
       </div>
     );
   }
 
-  // ==========================================
-  // NO DATA
-  // ==========================================
-
   if (!data) {
     return (
-      <div className="min-h-screen bg-[#f5f8fc] flex items-center justify-center">
-        <p className="text-[#6b7280]">
+      <div className="min-h-screen bg-[#f4f7fb] flex items-center justify-center">
+        <p className="text-slate-500">
           No social engineering analysis found.
         </p>
       </div>
     );
   }
 
-  // ==========================================
+  // ============================================================
   // DATA
-  // ==========================================
+  // ============================================================
+
+  const social = data.social || {};
+  const full = data.full || {};
 
   const score = Number(
-    data.social_engineering_score ?? 10
+    social.social_engineering_score ?? 0
   );
 
-  const techniques = Array.isArray(data.techniques)
-    ? data.techniques
+  const detected = Boolean(social.detected);
+
+  const techniques = Array.isArray(social.techniques)
+    ? social.techniques
     : [];
 
-  const evidence = Array.isArray(data.evidence)
-    ? data.evidence
+  const evidence = Array.isArray(social.evidence)
+    ? social.evidence
     : [];
 
-  const riskImpact =
-    data.risk_impact || "Unknown";
+  const phishingScore = Number(
+    full.phishing_score ?? 0
+  );
 
-  const detected = Boolean(data.detected);
+  const legitimateScore = Number(
+    full.legitimate_score ?? 0
+  );
 
-  // Score styling
-  const getScoreColor = () => {
-    if (score >= 70) return "text-[#c5221f]";
-    if (score >= 40) return "text-[#f29900]";
-    return "text-[#188038]";
-  };
+  const ipTracing = full.ip_tracing || {};
 
-  const getScoreBg = () => {
-    if (score >= 70) return "bg-[#fce8e6]";
-    if (score >= 40) return "bg-[#fef7e0]";
-    return "bg-[#e6f4ea]";
-  };
+  // ============================================================
+  // RISK
+  // ============================================================
 
-  const getRiskColor = () => {
-    if (riskImpact.toLowerCase() === "high") {
-      return "bg-[#fce8e6] text-[#c5221f]";
+  const risk = useMemo(() => {
+    if (score >= 70) {
+      return {
+        level: "HIGH",
+        color: "#dc2626",
+        text: "text-red-600",
+        bg: "bg-red-50",
+        border: "border-red-200",
+        ring: "#dc2626",
+        description:
+          "Multiple social-engineering indicators were detected.",
+      };
     }
 
-    if (riskImpact.toLowerCase() === "medium") {
-      return "bg-[#fef7e0] text-[#b06000]";
+    if (score >= 40) {
+      return {
+        level: "MEDIUM",
+        color: "#d97706",
+        text: "text-amber-600",
+        bg: "bg-amber-50",
+        border: "border-amber-200",
+        ring: "#d97706",
+        description:
+          "Some behavioral indicators require additional review.",
+      };
     }
 
-    return "bg-[#e6f4ea] text-[#137333]";
-  };
+    if (score >= 15) {
+      return {
+        level: "LOW",
+        color: "#2563eb",
+        text: "text-blue-600",
+        bg: "bg-blue-50",
+        border: "border-blue-200",
+        ring: "#2563eb",
+        description:
+          "Limited social-engineering indicators were detected.",
+      };
+    }
+
+    return {
+      level: "MINIMAL",
+      color: "#16a34a",
+      text: "text-green-600",
+      bg: "bg-green-50",
+      border: "border-green-200",
+      ring: "#16a34a",
+      description:
+        "No significant social-engineering indicators were detected.",
+    };
+  }, [score]);
+
+  // ============================================================
+  // INDICATORS
+  // ============================================================
+
+  const indicators = [
+    {
+      key: "urgency",
+      label: "Urgency",
+      icon: "⏱️",
+      detected: Boolean(social.urgency),
+      description: social.urgency
+        ? "Artificial time pressure detected."
+        : "No artificial time pressure found.",
+    },
+
+    {
+      key: "fear",
+      label: "Fear / Threat",
+      icon: "⚠️",
+      detected: Boolean(social.fear),
+      description: social.fear
+        ? "Threatening or fear-inducing language detected."
+        : "No threatening language found.",
+    },
+
+    {
+      key: "authority",
+      label: "Authority Impersonation",
+      icon: "👤",
+      detected: Boolean(
+        social.authority_impersonation
+      ),
+      description: social.authority_impersonation
+        ? "Possible trusted-entity impersonation detected."
+        : "No trusted-entity impersonation detected.",
+    },
+
+    {
+      key: "reward",
+      label: "Reward / Prize",
+      icon: "🎁",
+      detected: Boolean(social.reward),
+      description: social.reward
+        ? "Reward or prize manipulation detected."
+        : "No unusual reward or prize language found.",
+    },
+
+    {
+      key: "secrecy",
+      label: "Secrecy",
+      icon: "🔒",
+      detected: Boolean(social.secrecy),
+      description: social.secrecy
+        ? "Secrecy-related instructions detected."
+        : "No secrecy-related instructions found.",
+    },
+  ];
+
+  const detectedIndicators = indicators.filter(
+    (item) => item.detected
+  );
+
+  // ============================================================
+  // TABS
+  // ============================================================
+
+  const tabs = [
+    {
+      id: "overview",
+      label: "Overview",
+      icon: "◉",
+    },
+    {
+      id: "behavior",
+      label: "Behavioral Indicators",
+      icon: "◈",
+    },
+    {
+      id: "evidence",
+      label: "Evidence",
+      icon: "⌕",
+    },
+    {
+      id: "explanation",
+      label: "AI Explanation",
+      icon: "✦",
+    },
+    {
+      id: "correlation",
+      label: "Correlation",
+      icon: "⌁",
+    },
+  ];
+
+  // ============================================================
+  // SCORE CIRCLE
+  // ============================================================
+
+  const radius = 52;
+  const circumference = 2 * Math.PI * radius;
+  const progress =
+    circumference - (score / 100) * circumference;
+
+  // ============================================================
+  // PAGE
+  // ============================================================
 
   return (
-    <div className="min-h-screen bg-[#f5f8fc]">
+    <div className="min-h-screen bg-[#f4f7fb] text-slate-900">
 
-      {/* ==========================================
-          TOP HEADER
-      ========================================== */}
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
 
-      <div className="bg-white border-b border-[#e5e7eb]">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto max-w-[1500px] px-5 lg:px-8">
 
-        <div className="max-w-6xl mx-auto px-6 py-5">
+          <div className="flex min-h-[82px] items-center justify-between gap-5">
 
-          <div className="flex items-center justify-between">
+            {/* LEFT */}
 
             <div className="flex items-center gap-4">
 
-              <div className="w-12 h-12 rounded-xl bg-[#e8f0fe] flex items-center justify-center text-2xl">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-100 to-blue-100 text-2xl shadow-sm">
                 🧠
               </div>
 
               <div>
-                <h1 className="text-xl font-bold text-[#202124]">
-                  Social Engineering Analysis
-                </h1>
+                <div className="flex items-center gap-3">
 
-                <p className="text-sm text-[#6b7280] mt-1">
-                  Behavioral threat intelligence
+                  <h1 className="text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
+                    Social Engineering Analysis
+                  </h1>
+
+                  <span className="hidden rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-600 sm:inline-flex">
+                    AI Security
+                  </span>
+
+                </div>
+
+                <p className="mt-1 text-xs text-slate-500 sm:text-sm">
+                  Behavioral threat intelligence & forensic analysis
                 </p>
               </div>
 
             </div>
 
-            {/* Cache indicator */}
-            <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-full bg-[#e6f4ea] text-[#137333] text-xs font-medium">
+            {/* RIGHT */}
 
-              <span className="w-2 h-2 rounded-full bg-[#34a853]" />
+            <div className="hidden items-center gap-3 md:flex">
 
-              Analysis Loaded
+              <div className="flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-4 py-2 text-xs font-semibold text-green-700">
+                <span className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_0_4px_rgba(34,197,94,0.12)]" />
+                Analysis Loaded
+              </div>
+
+              <div className="rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-semibold text-indigo-600">
+                ✦ ML + AI
+              </div>
 
             </div>
 
           </div>
 
         </div>
+      </header>
 
+
+      {/* ======================================================
+          TABS
+      ====================================================== */}
+
+      <div className="border-b border-slate-200 bg-white">
+        <div className="mx-auto max-w-[1500px] overflow-x-auto px-5 lg:px-8">
+
+          <div className="flex min-w-max items-center gap-1">
+
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative flex items-center gap-2 px-4 py-4 text-xs font-semibold transition ${
+                  activeTab === tab.id
+                    ? "text-blue-600"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <span>{tab.icon}</span>
+
+                {tab.label}
+
+                {activeTab === tab.id && (
+                  <span className="absolute bottom-0 left-3 right-3 h-[3px] rounded-full bg-blue-600" />
+                )}
+              </button>
+            ))}
+
+          </div>
+
+        </div>
       </div>
 
-      {/* ==========================================
+
+      {/* ======================================================
           MAIN
-      ========================================== */}
+      ====================================================== */}
 
-      <main className="max-w-6xl mx-auto px-6 py-8">
+      <main className="mx-auto max-w-[1500px] px-5 py-6 lg:px-8 lg:py-8">
 
-        {/* ==========================================
-            HERO / SCORE
-        ========================================== */}
+        {/* ==================================================
+            OVERVIEW
+        ================================================== */}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {(activeTab === "overview" ||
+          activeTab === "behavior") && (
 
-          {/* Score Card */}
+          <>
 
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-[#e5e7eb] shadow-sm p-7">
+            {/* HERO */}
 
-            <div className="flex flex-col sm:flex-row items-center gap-8">
+            <section className="grid grid-cols-1 gap-5 xl:grid-cols-[1.7fr_1fr]">
 
-              {/* Circular score */}
+              {/* SCORE */}
 
-              <div className="relative w-40 h-40 shrink-0">
+              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
 
-                <svg
-                  viewBox="0 0 120 120"
-                  className="w-full h-full -rotate-90"
-                >
+                <div className="p-6 sm:p-8">
 
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r="50"
-                    fill="none"
-                    stroke="#edf0f2"
-                    strokeWidth="10"
-                  />
+                  <div className="flex flex-col items-center gap-8 md:flex-row">
 
-                  <circle
-                    cx="60"
-                    cy="60"
-                    r="50"
-                    fill="none"
-                    stroke={
-                      score >= 70
-                        ? "#c5221f"
-                        : score >= 40
-                        ? "#f29900"
-                        : "#188038"
-                    }
-                    strokeWidth="10"
-                    strokeLinecap="round"
-                    strokeDasharray={`${score * 3.14} 314`}
-                  />
+                    {/* CIRCLE */}
 
-                </svg>
+                    <div className="relative h-48 w-48 shrink-0">
 
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <svg
+                        viewBox="0 0 120 120"
+                        className="h-full w-full -rotate-90"
+                      >
+
+                        <circle
+                          cx="60"
+                          cy="60"
+                          r={radius}
+                          fill="none"
+                          stroke="#edf1f5"
+                          strokeWidth="9"
+                        />
+
+                        <circle
+                          cx="60"
+                          cy="60"
+                          r={radius}
+                          fill="none"
+                          stroke={risk.ring}
+                          strokeWidth="9"
+                          strokeLinecap="round"
+                          strokeDasharray={circumference}
+                          strokeDashoffset={progress}
+                          className="transition-all duration-1000"
+                        />
+
+                      </svg>
+
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+
+                        <span
+                          className="text-5xl font-black tracking-tight"
+                          style={{
+                            color: risk.color,
+                          }}
+                        >
+                          {score}
+                        </span>
+
+                        <span className="text-xs font-medium text-slate-400">
+                          / 100
+                        </span>
+
+                      </div>
+
+                    </div>
+
+
+                    {/* INFORMATION */}
+
+                    <div className="flex-1 text-center md:text-left">
+
+                      <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
+
+                        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                          Social Engineering Risk
+                        </span>
+
+                        <span
+                          className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${risk.bg} ${risk.text}`}
+                        >
+                          {risk.level}
+                        </span>
+
+                      </div>
+
+                      <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+
+                        {detected
+                          ? "Social Engineering Detected"
+                          : "No Strong Indicators"}
+
+                      </h2>
+
+                      <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-500">
+
+                        {social.explanation ||
+                          risk.description}
+
+                      </p>
+
+                      <div className="mt-6 flex flex-wrap justify-center gap-3 md:justify-start">
+
+                        <MiniStat
+                          label="Risk Score"
+                          value={`${score}/100`}
+                        />
+
+                        <MiniStat
+                          label="Indicators"
+                          value={`${detectedIndicators.length}`}
+                        />
+
+                        <MiniStat
+                          label="Techniques"
+                          value={`${techniques.length}`}
+                        />
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              {/* ACTION */}
+
+              <div
+                className={`rounded-3xl border p-6 shadow-sm ${risk.bg} ${risk.border}`}
+              >
+
+                <div className="flex items-start justify-between">
+
+                  <div>
+
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                      Recommended Action
+                    </p>
+
+                    <h3 className="mt-3 text-xl font-black text-slate-900">
+                      {score < 40
+                        ? "No Immediate Action Required"
+                        : score < 70
+                        ? "Review Before Taking Action"
+                        : "Investigation Recommended"}
+                    </h3>
+
+                  </div>
+
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-xl shadow-sm">
+                    {score < 40 ? "✓" : "⚠"}
+                  </div>
+
+                </div>
+
+                <p className="mt-5 text-sm leading-7 text-slate-600">
+                  {social.recommendation ||
+                    "No recommendation available."}
+                </p>
+
+                <div className="mt-6 rounded-2xl border border-white/80 bg-white/70 p-4">
+
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Detection Status
+                  </p>
+
+                  <div className="mt-2 flex items-center gap-2">
+
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${
+                        detected
+                          ? "bg-red-500"
+                          : "bg-green-500"
+                      }`}
+                    />
+
+                    <span className="text-sm font-bold text-slate-800">
+
+                      {detected
+                        ? "Threat indicators found"
+                        : "No threat detected"}
+
+                    </span>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </section>
+
+
+            {/* SIGNAL CARDS */}
+
+            <section className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-5">
+
+              {indicators.map((item) => (
+                <SignalCard
+                  key={item.key}
+                  icon={item.icon}
+                  label={item.label}
+                  detected={item.detected}
+                />
+              ))}
+
+            </section>
+
+
+            {/* RISK FACTORS */}
+
+            <section className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+
+                <SectionTitle
+                  icon="◈"
+                  title="Risk Factor Breakdown"
+                  subtitle="Behavioral signals contributing to the assessment"
+                />
+
+                <div className="mt-6 space-y-5">
+
+                  {indicators.map((item) => {
+
+                    const percentage = item.detected
+                      ? 100
+                      : 0;
+
+                    return (
+                      <div key={item.key}>
+
+                        <div className="mb-2 flex items-center justify-between">
+
+                          <span className="text-xs font-semibold text-slate-700">
+                            {item.label}
+                          </span>
+
+                          <span
+                            className={`text-[11px] font-bold ${
+                              item.detected
+                                ? "text-red-600"
+                                : "text-green-600"
+                            }`}
+                          >
+                            {item.detected
+                              ? "Detected"
+                              : "Clear"}
+                          </span>
+
+                        </div>
+
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{
+                              width: `${percentage}%`,
+                              backgroundColor: item.detected
+                                ? "#dc2626"
+                                : "#22c55e",
+                            }}
+                          />
+
+                        </div>
+
+                      </div>
+                    );
+                  })}
+
+                </div>
+
+                <div className="mt-7 flex items-center gap-4 border-t border-slate-100 pt-5">
+
+                  <div className="flex-1">
+
+                    <p className="text-xs font-semibold text-slate-500">
+                      Overall Social Engineering Score
+                    </p>
+
+                  </div>
+
+                  <div className="h-2 w-40 overflow-hidden rounded-full bg-slate-100">
+
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${score}%`,
+                        backgroundColor: risk.color,
+                      }}
+                    />
+
+                  </div>
 
                   <span
-                    className={`text-3xl font-bold ${getScoreColor()}`}
+                    className="text-sm font-black"
+                    style={{
+                      color: risk.color,
+                    }}
                   >
-                    {score}
-                  </span>
-
-                  <span className="text-xs text-[#6b7280]">
-                    / 100
+                    {score}/100
                   </span>
 
                 </div>
 
               </div>
 
-              {/* Score information */}
 
-              <div className="flex-1 text-center sm:text-left">
+              {/* COMMUNICATION PATTERN */}
 
-                <p className="text-xs uppercase tracking-wider text-[#6b7280] font-semibold">
-                  Social Engineering Risk
-                </p>
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
 
-                <h2 className="mt-2 text-2xl font-bold text-[#202124]">
-                  {detected
-                    ? "Social Engineering Detected"
-                    : "No Strong Indicators"}
-                </h2>
+                <SectionTitle
+                  icon="⌁"
+                  title="Communication Pattern"
+                  subtitle="Behavioral characteristics detected in the message"
+                />
 
-                <p className="mt-3 text-sm leading-6 text-[#5f6368]">
-                  {data.explanation ||
-                    "No explanation available."}
+                <div className="mt-5 divide-y divide-slate-100">
+
+                  {indicators.map((item) => (
+
+                    <div
+                      key={item.key}
+                      className="flex items-center justify-between py-4"
+                    >
+
+                      <div className="flex items-center gap-3">
+
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 text-sm">
+                          {item.icon}
+                        </span>
+
+                        <span className="text-xs font-semibold text-slate-700">
+                          {item.label}
+                        </span>
+
+                      </div>
+
+                      <StatusBadge
+                        detected={item.detected}
+                      />
+
+                    </div>
+
+                  ))}
+
+                </div>
+
+              </div>
+
+            </section>
+
+          </>
+        )}
+
+
+        {/* ==================================================
+            BEHAVIORAL INDICATORS
+        ================================================== */}
+
+        {activeTab === "behavior" && (
+          <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+
+            <SectionTitle
+              icon="🎯"
+              title="Behavioral Indicators"
+              subtitle="Detailed analysis of social-engineering patterns"
+            />
+
+            <div className="mt-6 overflow-x-auto">
+
+              <table className="w-full min-w-[700px]">
+
+                <thead>
+
+                  <tr className="border-b border-slate-100 text-left">
+
+                    <th className="px-4 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Indicator
+                    </th>
+
+                    <th className="px-4 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Status
+                    </th>
+
+                    <th className="px-4 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Analysis
+                    </th>
+
+                  </tr>
+
+                </thead>
+
+                <tbody>
+
+                  {indicators.map((item) => (
+
+                    <tr
+                      key={item.key}
+                      className="border-b border-slate-50 last:border-0"
+                    >
+
+                      <td className="px-4 py-4">
+
+                        <div className="flex items-center gap-3">
+
+                          <span>
+                            {item.icon}
+                          </span>
+
+                          <span className="text-sm font-semibold">
+                            {item.label}
+                          </span>
+
+                        </div>
+
+                      </td>
+
+                      <td className="px-4 py-4">
+
+                        <StatusBadge
+                          detected={item.detected}
+                        />
+
+                      </td>
+
+                      <td className="px-4 py-4 text-sm text-slate-500">
+
+                        {item.description}
+
+                      </td>
+
+                    </tr>
+
+                  ))}
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          </section>
+        )}
+
+
+        {/* ==================================================
+            EVIDENCE
+        ================================================== */}
+
+        {activeTab === "evidence" && (
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+
+            <SectionTitle
+              icon="⌕"
+              title="Evidence"
+              subtitle="Content that contributed to the social-engineering assessment"
+            />
+
+            <div className="mt-6">
+
+              {evidence.length > 0 ? (
+
+                <div className="space-y-3">
+
+                  {evidence.map((item, index) => (
+
+                    <div
+                      key={index}
+                      className="flex gap-4 rounded-2xl border border-amber-100 bg-amber-50/60 p-5"
+                    >
+
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                        "
+                      </div>
+
+                      <div>
+
+                        <p className="text-sm leading-7 text-slate-700">
+                          {String(item).replace(
+                            /^"|"$/g,
+                            ""
+                          )}
+                        </p>
+
+                        <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-amber-600">
+                          Behavioral Evidence
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                  ))}
+
+                </div>
+
+              ) : (
+
+                <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50/50 py-16 text-center">
+
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-green-50 text-2xl">
+                    ✓
+                  </div>
+
+                  <h3 className="mt-4 text-sm font-bold text-slate-800">
+                    No suspicious evidence detected
+                  </h3>
+
+                  <p className="mx-auto mt-2 max-w-md text-xs leading-6 text-slate-500">
+                    The analysis did not return evidence snippets
+                    associated with social-engineering behavior.
+                  </p>
+
+                </div>
+
+              )}
+
+            </div>
+
+          </section>
+        )}
+
+
+        {/* ==================================================
+            AI EXPLANATION
+        ================================================== */}
+
+        {activeTab === "explanation" && (
+          <section className="grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">
+
+            <div className="rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm">
+
+              <SectionTitle
+                icon="✦"
+                title="AI Explanation"
+                subtitle="Why the system produced this assessment"
+              />
+
+              <div className="mt-6 rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-6">
+
+                <div className="flex items-center gap-3">
+
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm">
+                    ✦
+                  </div>
+
+                  <div>
+
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-blue-500">
+                      AI Assessment
+                    </p>
+
+                    <h3 className="mt-1 text-lg font-black text-slate-900">
+                      {risk.level} Social Engineering Risk
+                    </h3>
+
+                  </div>
+
+                </div>
+
+                <p className="mt-6 text-sm leading-8 text-slate-600">
+                  {social.explanation ||
+                    "No AI explanation was returned by the backend."}
                 </p>
 
               </div>
 
             </div>
 
-          </div>
 
-          {/* Risk Card */}
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
 
-          <div className="bg-white rounded-2xl border border-[#e5e7eb] shadow-sm p-6">
+              <SectionTitle
+                icon="✓"
+                title="Why This Score?"
+                subtitle="Detected and cleared indicators"
+              />
 
-            <p className="text-xs uppercase tracking-wider font-semibold text-[#6b7280]">
-              Risk Impact
-            </p>
+              <div className="mt-5 space-y-3">
 
-            <div className="mt-5">
+                {indicators.map((item) => (
 
-              <span
-                className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${getRiskColor()}`}
-              >
-                <span className="w-2 h-2 rounded-full mr-2 bg-current" />
-                {riskImpact}
+                  <div
+                    key={item.key}
+                    className="flex items-start gap-3 rounded-2xl bg-slate-50 p-4"
+                  >
+
+                    <span
+                      className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                        item.detected
+                          ? "bg-red-100 text-red-600"
+                          : "bg-green-100 text-green-600"
+                      }`}
+                    >
+                      {item.detected ? "!" : "✓"}
+                    </span>
+
+                    <div>
+
+                      <p className="text-xs font-bold text-slate-800">
+                        {item.label}
+                      </p>
+
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        {item.description}
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                ))}
+
+              </div>
+
+            </div>
+
+          </section>
+        )}
+
+
+        {/* ==================================================
+            CORRELATION
+        ================================================== */}
+
+        {activeTab === "correlation" && (
+          <section className="space-y-5">
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+
+              <SectionTitle
+                icon="⌁"
+                title="Forensic Correlation"
+                subtitle="Cross-module intelligence from the complete email analysis"
+              />
+
+              <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+
+                <CorrelationCard
+                  title="Social Engineering"
+                  value={`${score}/100`}
+                  subtitle={risk.level}
+                  color={risk.color}
+                />
+
+                <CorrelationCard
+                  title="Phishing Score"
+                  value={`${phishingScore}%`}
+                  subtitle="ML classification"
+                  color="#7c3aed"
+                />
+
+                <CorrelationCard
+                  title="Legitimate Score"
+                  value={`${legitimateScore}%`}
+                  subtitle="ML classification"
+                  color="#16a34a"
+                />
+
+                <CorrelationCard
+                  title="IP Intelligence"
+                  value={
+                    ipTracing.status || "N/A"
+                  }
+                  subtitle="Infrastructure analysis"
+                  color={
+                    ipTracing.status === "SUCCESS"
+                      ? "#16a34a"
+                      : "#64748b"
+                  }
+                />
+
+              </div>
+
+            </div>
+
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+
+              <SectionTitle
+                icon="◎"
+                title="Forensic Investigation Flow"
+                subtitle="How this analysis connects to the wider email-threat pipeline"
+              />
+
+              <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-5">
+
+                <FlowStep
+                  number="01"
+                  title="Email"
+                  description="Message ingested"
+                />
+
+                <FlowLine />
+
+                <FlowStep
+                  number="02"
+                  title="Behavior"
+                  description="Social signals"
+                />
+
+                <FlowLine />
+
+                <FlowStep
+                  number="03"
+                  title="Phishing"
+                  description={`${phishingScore}% score`}
+                />
+
+                <FlowLine />
+
+                <FlowStep
+                  number="04"
+                  title="IP Intelligence"
+                  description={
+                    ipTracing.status || "Pending"
+                  }
+                />
+
+                <FlowLine />
+
+                <FlowStep
+                  number="05"
+                  title="Forensics"
+                  description="Investigation report"
+                />
+
+              </div>
+
+            </div>
+
+          </section>
+        )}
+
+
+        {/* ==================================================
+            TECHNIQUES + FOOTER INFORMATION
+        ================================================== */}
+
+        <section className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+
+          {/* TECHNIQUES */}
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+
+            <div className="flex items-start justify-between gap-4">
+
+              <SectionTitle
+                icon="◉"
+                title="Detected Techniques"
+                subtitle="Social-engineering methods identified"
+              />
+
+              <span className="shrink-0 rounded-full bg-blue-50 px-3 py-1.5 text-[10px] font-bold text-blue-600">
+                {techniques.length} detected
               </span>
 
             </div>
 
-            <div className="mt-7 pt-5 border-t border-[#edf0f2]">
+            <div className="mt-6">
 
-              <p className="text-xs text-[#6b7280]">
-                Detection Status
-              </p>
+              {techniques.length > 0 ? (
 
-              <p className="mt-1 text-lg font-semibold text-[#202124]">
-                {detected ? "Threat indicators found" : "No threat detected"}
-              </p>
+                <div className="space-y-3">
 
-            </div>
+                  {techniques.map((technique, index) => (
 
-          </div>
+                    <div
+                      key={index}
+                      className="flex items-center gap-4 rounded-2xl border border-red-100 bg-red-50 p-4"
+                    >
 
-        </div>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-600">
+                        ⚠
+                      </div>
 
-        {/* ==========================================
-            TECHNIQUES
-        ========================================== */}
+                      <div>
 
-        <div className="bg-white rounded-2xl border border-[#e5e7eb] shadow-sm p-6 mb-6">
+                        <p className="text-sm font-bold text-slate-800">
+                          {typeof technique === "string"
+                            ? technique
+                            : technique?.name ||
+                              "Unknown Technique"}
+                        </p>
 
-          <div className="flex items-center justify-between mb-5">
+                        <p className="mt-1 text-xs text-slate-500">
+                          Behavioral attack pattern detected
+                        </p>
 
-            <div>
-              <h2 className="text-lg font-semibold text-[#202124]">
-                Detected Techniques
-              </h2>
+                      </div>
 
-              <p className="text-sm text-[#6b7280] mt-1">
-                Social engineering methods identified in the email
-              </p>
-            </div>
+                    </div>
 
-            <div className="px-3 py-1 rounded-full bg-[#e8f0fe] text-[#1a73e8] text-xs font-semibold">
-              {techniques.length} detected
-            </div>
-
-          </div>
-
-          {techniques.length > 0 ? (
-            <div className="flex flex-wrap gap-3">
-
-              {techniques.map((technique, index) => (
-                <div
-                  key={`${technique}-${index}`}
-                  className="flex items-center gap-2 px-4 py-3 rounded-xl bg-[#fff8e1] border border-[#f6d365]"
-                >
-                  <span className="text-lg">
-                    🎯
-                  </span>
-
-                  <span className="text-sm font-medium text-[#7a4f01]">
-                    {technique}
-                  </span>
+                  ))}
 
                 </div>
-              ))}
 
-            </div>
-          ) : (
-            <p className="text-sm text-[#6b7280]">
-              No specific social engineering techniques were detected.
-            </p>
-          )}
+              ) : (
 
-        </div>
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-12 text-center">
 
-        {/* ==========================================
-            SIGNAL GRID
-        ========================================== */}
+                  <div className="text-3xl">
+                    🛡️
+                  </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <h3 className="mt-3 text-sm font-bold text-slate-800">
+                    No social-engineering techniques detected
+                  </h3>
 
-          <SignalCard
-            label="Reward"
-            detected={data.reward}
-            icon="🎁"
-          />
-
-          <SignalCard
-            label="Urgency"
-            detected={data.urgency}
-            icon="⏱️"
-          />
-
-          <SignalCard
-            label="Fear"
-            detected={data.fear}
-            icon="⚠️"
-          />
-
-          <SignalCard
-            label="Secrecy"
-            detected={data.secrecy}
-            icon="🔒"
-          />
-
-        </div>
-
-        {/* ==========================================
-            AUTHORITY
-        ========================================== */}
-
-        <div className="bg-white rounded-2xl border border-[#e5e7eb] shadow-sm p-6 mb-6">
-
-          <div className="flex items-center justify-between">
-
-            <div className="flex items-center gap-4">
-
-              <div className="w-11 h-11 rounded-xl bg-[#f1f3f4] flex items-center justify-center text-xl">
-                👤
-              </div>
-
-              <div>
-                <h2 className="font-semibold text-[#202124]">
-                  Authority Impersonation
-                </h2>
-
-                <p className="text-sm text-[#6b7280] mt-1">
-                  Attempts to exploit trust in an authority or organization
-                </p>
-              </div>
-
-            </div>
-
-            <StatusBadge
-              detected={data.authority_impersonation}
-            />
-
-          </div>
-
-        </div>
-
-        {/* ==========================================
-            EVIDENCE
-        ========================================== */}
-
-        <div className="bg-white rounded-2xl border border-[#e5e7eb] shadow-sm p-6 mb-6">
-
-          <div className="mb-5">
-
-            <h2 className="text-lg font-semibold text-[#202124]">
-              Evidence
-            </h2>
-
-            <p className="text-sm text-[#6b7280] mt-1">
-              Content that contributed to the detection
-            </p>
-
-          </div>
-
-          {evidence.length > 0 ? (
-            <div className="space-y-3">
-
-              {evidence.map((item, index) => (
-                <div
-                  key={index}
-                  className="flex gap-3 p-4 rounded-xl bg-[#f8f9fa] border border-[#edf0f2]"
-                >
-
-                  <span className="text-[#f29900] text-lg">
-                    "
-                  </span>
-
-                  <p className="text-sm leading-6 text-[#3c4043]">
-                    {String(item).replace(/^"|"$/g, "")}
+                  <p className="mx-auto mt-2 max-w-sm text-xs leading-6 text-slate-500">
+                    The analyzed message does not contain
+                    significant behavioral attack patterns.
                   </p>
 
                 </div>
-              ))}
+
+              )}
 
             </div>
-          ) : (
-            <p className="text-sm text-[#6b7280]">
-              No evidence snippets were returned.
-            </p>
-          )}
 
-        </div>
+          </div>
 
-        {/* ==========================================
+
+          {/* SUMMARY */}
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+
+            <SectionTitle
+              icon="◎"
+              title="Investigation Summary"
+              subtitle="Current intelligence available for this message"
+            />
+
+            <div className="mt-5 divide-y divide-slate-100">
+
+              <SummaryRow
+                label="Social Engineering"
+                value={`${score}/100`}
+                color={risk.color}
+              />
+
+              <SummaryRow
+                label="Detection"
+                value={
+                  detected
+                    ? "Threat detected"
+                    : "No threat detected"
+                }
+                color={
+                  detected
+                    ? "#dc2626"
+                    : "#16a34a"
+                }
+              />
+
+              <SummaryRow
+                label="Techniques"
+                value={`${techniques.length} detected`}
+              />
+
+              <SummaryRow
+                label="Evidence"
+                value={`${evidence.length} snippets`}
+              />
+
+              <SummaryRow
+                label="Phishing Score"
+                value={`${phishingScore}%`}
+              />
+
+              <SummaryRow
+                label="IP Intelligence"
+                value={
+                  ipTracing.status || "Not available"
+                }
+                color={
+                  ipTracing.status === "SUCCESS"
+                    ? "#16a34a"
+                    : "#64748b"
+                }
+              />
+
+            </div>
+
+          </div>
+
+        </section>
+
+
+        {/* ==================================================
             RECOMMENDATION
-        ========================================== */}
+        ================================================== */}
 
-        <div className="rounded-2xl border border-[#c8e6c9] bg-[#f1f8f4] p-6">
+        <section
+          className={`mt-5 rounded-3xl border p-6 shadow-sm ${
+            score >= 70
+              ? "border-red-200 bg-red-50"
+              : score >= 40
+              ? "border-amber-200 bg-amber-50"
+              : "border-green-200 bg-green-50"
+          }`}
+        >
 
-          <div className="flex gap-4">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
 
-            <div className="w-11 h-11 shrink-0 rounded-xl bg-[#e6f4ea] flex items-center justify-center text-xl">
-              🛡️
+            <div
+              className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm ${
+                score >= 40
+                  ? "text-red-600"
+                  : "text-green-600"
+              }`}
+            >
+              {score >= 40 ? "⚠️" : "🛡️"}
             </div>
 
-            <div>
+            <div className="flex-1">
 
-              <h2 className="font-semibold text-[#137333]">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
                 Security Recommendation
+              </p>
+
+              <h2 className="mt-1 text-lg font-black text-slate-900">
+                {social.recommendation ||
+                  "No recommendation available."}
               </h2>
 
-              <p className="mt-2 text-sm leading-6 text-[#3c4043]">
-                {data.recommendation ||
-                  "No recommendation available."}
+              <p className="mt-2 text-xs leading-6 text-slate-600">
+                This recommendation is based on the behavioral
+                indicators returned by the social-engineering
+                analysis engine.
               </p>
 
             </div>
 
           </div>
+
+        </section>
+
+
+        {/* ==================================================
+            MESSAGE METADATA
+        ================================================== */}
+
+        <div className="mt-5 flex flex-col gap-2 text-[10px] text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+
+          <span>
+            Social Engineering Analysis Engine
+          </span>
+
+          <span>
+            Message ID:{" "}
+            {full.message_id || "Unavailable"}
+          </span>
 
         </div>
 
@@ -576,17 +1427,38 @@ const SocialPage = () => {
 };
 
 
-// ==========================================
-// SIGNAL CARD
-// ==========================================
+// ============================================================
+// COMPONENTS
+// ============================================================
+
+const MiniStat = ({ label, value }) => {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-left">
+      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+        {label}
+      </p>
+
+      <p className="mt-0.5 text-sm font-black text-slate-800">
+        {value}
+      </p>
+    </div>
+  );
+};
+
 
 const SignalCard = ({
+  icon,
   label,
   detected,
-  icon,
 }) => {
   return (
-    <div className="bg-white rounded-xl border border-[#e5e7eb] shadow-sm p-5">
+    <div
+      className={`rounded-2xl border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+        detected
+          ? "border-red-200"
+          : "border-slate-200"
+      }`}
+    >
 
       <div className="flex items-center justify-between">
 
@@ -598,14 +1470,14 @@ const SignalCard = ({
 
       </div>
 
-      <p className="mt-4 text-sm font-medium text-[#202124]">
+      <p className="mt-4 text-xs font-bold text-slate-800">
         {label}
       </p>
 
-      <p className="mt-1 text-xs text-[#6b7280]">
+      <p className="mt-1 text-[10px] text-slate-400">
         {detected
           ? "Indicator detected"
-          : "Not detected"}
+          : "No indicator detected"}
       </p>
 
     </div>
@@ -613,24 +1485,158 @@ const SignalCard = ({
 };
 
 
-// ==========================================
-// STATUS BADGE
-// ==========================================
-
 const StatusBadge = ({ detected }) => {
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ${
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[9px] font-bold ${
         detected
-          ? "bg-[#fce8e6] text-[#c5221f]"
-          : "bg-[#e6f4ea] text-[#137333]"
+          ? "bg-red-50 text-red-600"
+          : "bg-green-50 text-green-600"
       }`}
     >
-      <span className="w-1.5 h-1.5 rounded-full bg-current mr-1.5" />
+
+      <span
+        className={`mr-1.5 h-1.5 w-1.5 rounded-full ${
+          detected
+            ? "bg-red-500"
+            : "bg-green-500"
+        }`}
+      />
 
       {detected ? "Detected" : "Clear"}
+
     </span>
   );
 };
+
+
+const SectionTitle = ({
+  icon,
+  title,
+  subtitle,
+}) => {
+  return (
+    <div className="flex items-start gap-3">
+
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-sm text-blue-600">
+        {icon}
+      </div>
+
+      <div>
+
+        <h2 className="text-base font-bold text-slate-900">
+          {title}
+        </h2>
+
+        <p className="mt-1 text-xs text-slate-500">
+          {subtitle}
+        </p>
+
+      </div>
+
+    </div>
+  );
+};
+
+
+const CorrelationCard = ({
+  title,
+  value,
+  subtitle,
+  color,
+}) => {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+
+      <div
+        className="h-1.5 w-10 rounded-full"
+        style={{
+          backgroundColor: color,
+        }}
+      />
+
+      <p className="mt-4 text-xs font-semibold text-slate-500">
+        {title}
+      </p>
+
+      <p
+        className="mt-2 text-2xl font-black"
+        style={{
+          color,
+        }}
+      >
+        {value}
+      </p>
+
+      <p className="mt-1 text-[10px] text-slate-400">
+        {subtitle}
+      </p>
+
+    </div>
+  );
+};
+
+
+const FlowStep = ({
+  number,
+  title,
+  description,
+}) => {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+
+      <span className="text-[9px] font-black text-blue-500">
+        {number}
+      </span>
+
+      <p className="mt-2 text-sm font-bold text-slate-800">
+        {title}
+      </p>
+
+      <p className="mt-1 text-[10px] text-slate-400">
+        {description}
+      </p>
+
+    </div>
+  );
+};
+
+
+const FlowLine = () => {
+  return (
+    <div className="hidden items-center justify-center md:flex">
+      <span className="text-slate-300">
+        →
+      </span>
+    </div>
+  );
+};
+
+
+const SummaryRow = ({
+  label,
+  value,
+  color,
+}) => {
+  return (
+    <div className="flex items-center justify-between py-3.5">
+
+      <span className="text-xs font-medium text-slate-500">
+        {label}
+      </span>
+
+      <span
+        className="text-xs font-bold text-slate-800"
+        style={{
+          color: color || undefined,
+        }}
+      >
+        {value}
+      </span>
+
+    </div>
+  );
+};
+
 
 export default SocialPage;
