@@ -1,5 +1,6 @@
 from typing import Dict, Any
-
+import os
+from dotenv import load_dotenv
 from .header_parser import extract_candidate_ips
 from .ip_intelligence import lookup_ip
 from .ip_classifier import classify_ip
@@ -8,7 +9,7 @@ from .geolocation import get_geolocation
 from .origin_analysis import determine_origin
 from .forensic_report import generate_ip_report
 
-
+vpn_key = os.getenv("VPN_KEY")
 def analyze_ip_forensics(
     email_data: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -184,7 +185,7 @@ def analyze_ip_forensics(
 
             anonymization[ip] = analyze_anonymization(
                 ip,
-                info
+                vpn_key
             )
 
         except Exception as e:
