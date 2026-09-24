@@ -803,6 +803,12 @@ function PageHeader({ navigate, onAnalyze, analyzing, progress }) {
         >
           ← Back
         </button>
+        <button
+          onClick={() => openTool("/Forensicreport")}
+          className="px-4 py-2.5 rounded-xl bg-white border border-[#dbe7f5] text-[#536981] text-sm font-semibold hover:bg-[#f8fbff]"
+        >
+          Forensic Report
+        </button>
 
         <button
           onClick={onAnalyze}

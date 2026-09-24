@@ -8,6 +8,7 @@ import AnalyzerDashboard from "./pages/AnalyzerDashboard";
 import PhishingPage from "./pages/PhishingPage";
 import SocialPage from "./pages/SocialPage";
 import IPTracingPage from "./pages/IPTracingPage";
+import Forensicreport from "./pages/Forensicreport";
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
       <Route path="/phishing"  element = {<PhishingPage />} />
       <Route path="/social" element={ <SocialPage />} />
       <Route path = "/ip-tracing" element = {<IPTracingPage />} />
+      <Route path = "/Forensicreport" element = {<Forensicreport />} />
       {/* <Route path="/phishing" element={<Phishing />} />
       <Route path="/social" element={<Social />} />
       <Route path="/ip-tracing" element={<IPTracing />} />
