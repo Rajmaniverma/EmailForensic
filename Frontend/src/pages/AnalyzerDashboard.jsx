@@ -303,6 +303,9 @@ const city =
   const openTool = (path) => {
     navigate(`${path}?message_id=${encodeURIComponent(messageId || "")}`);
   };
+  const report = (path) => {
+    navigate(`${path}?message_id=${encodeURIComponent(messageId || "")}`);
+  };
 
   // ------------------------------------------------------------
   // LOADING
@@ -804,7 +807,7 @@ function PageHeader({ navigate, onAnalyze, analyzing, progress }) {
           ← Back
         </button>
         <button
-          onClick={() => openTool("/Forensicreport")}
+          onClick={() => report("/Forensicreport")}
           className="px-5 py-2.5 rounded-xl bg-[#2563eb] text-white text-sm font-semibold shadow-sm hover:bg-[#1d4ed8] disabled:opacity-60 hover:scale-105 active:scale-95 cursor-pointer"
         >
           Forensic Report
