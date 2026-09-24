@@ -343,53 +343,529 @@ from urllib.parse import urlparse
 # =========================================================
 
 URGENT_WORDS = [
+    # Basic urgency
     "urgent",
+    "urgently",
     "immediately",
     "asap",
-    "action required",
-    "act now",
-    "final warning",
-    "verify now",
-    "respond immediately"
-]
+    "as soon as possible",
+    "right away",
+    "without delay",
+    "at once",
+    "promptly",
 
+    # Action pressure
+    "action required",
+    "action needed",
+    "action is required",
+    "immediate action required",
+    "immediate action needed",
+    "act now",
+    "act immediately",
+    "take action now",
+    "take immediate action",
+    "please act now",
+    "please respond",
+    "please respond immediately",
+    "respond immediately",
+    "respond now",
+    "reply immediately",
+    "reply now",
+    "contact us immediately",
+
+    # Warnings / deadlines
+    "final warning",
+    "final notice",
+    "last warning",
+    "last notice",
+    "final reminder",
+    "last reminder",
+    "last chance",
+    "final chance",
+    "deadline",
+    "approaching deadline",
+    "deadline approaching",
+    "time is running out",
+    "time sensitive",
+    "time-sensitive",
+    "limited time",
+
+    # Time restrictions
+    "within 24 hours",
+    "within 48 hours",
+    "within 12 hours",
+    "within one hour",
+    "within an hour",
+    "before midnight",
+    "by today",
+    "by the end of today",
+    "before the deadline",
+    "expires today",
+    "expires soon",
+    "offer expires",
+    "access expires",
+
+    # Delay-pressure phrases
+    "do not delay",
+    "don't delay",
+    "do not wait",
+    "don't wait",
+    "do not ignore",
+    "don't ignore",
+    "do not postpone",
+    "don't postpone",
+    "avoid delay",
+    "avoid further delay",
+
+    # Immediate response
+    "immediate response",
+    "immediate attention",
+    "immediate assistance",
+    "immediate confirmation",
+    "immediate action",
+    "immediate attention required",
+    "your immediate attention is required",
+    "your immediate action is required",
+    "please act urgently",
+    "please respond urgently",
+
+    # Account/security pressure
+    "security alert",
+    "security warning",
+    "urgent security notice",
+    "important security notice",
+    "critical security alert",
+    "urgent account notice",
+    "account action required",
+    "account requires attention",
+    "immediate account action",
+    "immediate verification required"
+]
 CREDENTIAL_WORDS = [
+
+    # =========================
+    # Basic credentials
+    # =========================
     "password",
+    "passcode",
+    "pass code",
     "username",
+    "user name",
+    "user id",
+    "userid",
     "login",
+    "log in",
+    "signin",
+    "sign in",
     "credential",
+    "credentials",
+    "account credentials",
+    "access credentials",
+
+    # =========================
+    # Authentication
+    # =========================
+    "authentication",
+    "authenticate",
+    "authorization",
+    "authorize",
+    "authentication details",
+    "authentication information",
+    "authentication code",
+    "authentication token",
+    "access code",
+    "access key",
+    "security code",
+    "security token",
+    "verification code",
+    "confirmation code",
+
+    # =========================
+    # OTP / PIN
+    # =========================
     "otp",
+    "one time password",
+    "one-time password",
+    "one time passcode",
+    "one-time passcode",
+    "otp code",
+    "otp number",
     "pin",
-    "cvv",
+    "pin code",
+    "security pin",
+    "passkey",
+    "pass key",
+
+    # =========================
+    # Recovery / security
+    # =========================
+    "recovery code",
+    "recovery key",
+    "backup code",
+    "backup codes",
+    "security question",
+    "security answer",
+    "secret question",
+    "secret answer",
+    "recovery email",
+    "recovery phone",
+    "security details",
+    "security information",
+
+    # =========================
+    # Personal identity
+    # =========================
+    "identity",
+    "identity information",
+    "identity details",
+    "personal information",
+    "personal details",
+    "date of birth",
+    "birth date",
+    "social security number",
+    "national id",
+    "government id",
+    "id number",
+    "identification number",
+    "passport number",
+    "driving license",
+    "driver license",
+
+    # =========================
+    # Banking
+    # =========================
     "bank account",
-    "credit card"
+    "bank account number",
+    "account number",
+    "bank details",
+    "banking details",
+    "banking information",
+    "online banking",
+    "net banking",
+    "bank login",
+    "bank password",
+    "banking password",
+    "customer id",
+    "customer number",
+    "account holder",
+
+    # =========================
+    # Payment cards
+    # =========================
+    "credit card",
+    "credit card number",
+    "debit card",
+    "debit card number",
+    "card number",
+    "card details",
+    "card information",
+    "cardholder name",
+    "card holder",
+    "cvv",
+    "cvc",
+    "cvv2",
+    "security number",
+    "card expiry",
+    "expiry date",
+    "expiration date",
+
+    # =========================
+    # Financial authentication
+    # =========================
+    "transaction password",
+    "transaction pin",
+    "transaction code",
+    "payment password",
+    "payment pin",
+    "payment code",
+    "transfer code",
+    "banking pin",
+    "security token",
+    "authorization code",
+
+    # =========================
+    # Account access
+    # =========================
+    "account access",
+    "account password",
+    "account pin",
+    "account code",
+    "account verification code",
+    "account security code",
+    "access password",
+    "access pin",
+    "access token",
+    "session token",
+    "secret key",
+    "private key"
 ]
 
 THREAT_WORDS = [
-    "suspended",
-    "blocked",
-    "terminated",
-    "legal action",
-    "penalty",
-    "warning",
-    "account will be closed"
-]
 
+    # =========================
+    # Account status threats
+    # =========================
+    "suspended",
+    "suspension",
+    "account suspended",
+    "temporarily suspended",
+    "permanently suspended",
+
+    "blocked",
+    "account blocked",
+    "access blocked",
+    "account has been blocked",
+
+    "locked",
+    "account locked",
+    "account has been locked",
+
+    "terminated",
+    "account terminated",
+    "account termination",
+
+    "deactivated",
+    "account deactivated",
+    "account has been deactivated",
+
+    "disabled",
+    "account disabled",
+    "account has been disabled",
+
+    "restricted",
+    "account restricted",
+    "access restricted",
+    "restricted access",
+
+    "closed",
+    "account closed",
+    "account will be closed",
+    "account may be closed",
+    "account closure",
+
+    # =========================
+    # Access / service threats
+    # =========================
+    "access will be revoked",
+    "access revoked",
+    "access will be removed",
+    "access denied",
+    "service will be suspended",
+    "service suspended",
+    "service terminated",
+    "service interruption",
+    "service will be discontinued",
+    "loss of access",
+    "lose access",
+    "you will lose access",
+
+    # =========================
+    # Security threats
+    # =========================
+    "security warning",
+    "security alert",
+    "security threat",
+    "security risk",
+    "security violation",
+    "security breach",
+    "security incident",
+    "suspicious activity",
+    "unauthorized activity",
+    "unauthorized access",
+    "unusual activity",
+    "fraud detected",
+    "fraudulent activity",
+    "fraud alert",
+    "potential fraud",
+    "account compromised",
+    "account has been compromised",
+
+    # =========================
+    # Legal threats
+    # =========================
+    "legal action",
+    "legal consequences",
+    "legal proceedings",
+    "legal notice",
+    "law enforcement",
+    "reported to authorities",
+    "report to authorities",
+    "court action",
+    "court proceedings",
+    "lawsuit",
+    "legal complaint",
+
+    # =========================
+    # Financial penalties
+    # =========================
+    "penalty",
+    "penalties",
+    "fine",
+    "financial penalty",
+    "additional charges",
+    "late fee",
+    "late fees",
+    "additional fee",
+    "service fee",
+    "payment penalty",
+    "overdue payment",
+    "outstanding payment",
+    "amount overdue",
+
+    # =========================
+    # Warning phrases
+    # =========================
+    "warning",
+    "final warning",
+    "official warning",
+    "security warning",
+    "final notice",
+    "last notice",
+    "last warning",
+    "important notice",
+    "critical notice",
+    "violation notice",
+
+    # =========================
+    # Consequence / pressure
+    # =========================
+    "failure to comply",
+    "if you fail to comply",
+    "failure to respond",
+    "failure to verify",
+    "failure to confirm",
+    "failure to act",
+    "failure to provide",
+    "failure to update",
+    "failure will result",
+    "will result in suspension",
+    "will result in termination",
+    "will result in closure",
+    "may result in suspension",
+    "may result in termination",
+    "may result in account closure",
+    "your account will be closed",
+    "your account may be closed",
+    "your access will be terminated",
+    "your access may be terminated",
+
+    # =========================
+    # Deadline-related threats
+    # =========================
+    "deadline has passed",
+    "deadline approaching",
+    "deadline expires",
+    "before your account is closed",
+    "before access is revoked",
+    "before suspension",
+    "before termination",
+    "before account closure"
+]
 
 # =========================================================
 # SUSPICIOUS FILE EXTENSIONS
 # =========================================================
 
 SUSPICIOUS_EXTENSIONS = [
+
+    # =========================
+    # Windows executables
+    # =========================
     ".exe",
+    ".com",
     ".scr",
+    ".cpl",
+    ".dll",
+    ".ocx",
+
+    # =========================
+    # Windows batch / command
+    # =========================
     ".bat",
     ".cmd",
-    ".js",
-    ".vbs",
+
+    # =========================
+    # PowerShell
+    # =========================
     ".ps1",
+    ".psm1",
+    ".psd1",
+    ".ps1xml",
+
+    # =========================
+    # Windows scripting
+    # =========================
+    ".js",
+    ".jse",
+    ".vbs",
+    ".vbe",
+    ".wsf",
+    ".wsh",
+    ".hta",
+
+    # =========================
+    # Java / application files
+    # =========================
     ".jar",
-    ".msi"
+    ".jnlp",
+    ".msi",
+    ".msp",
+    ".appx",
+    ".appxbundle",
+    ".msix",
+    ".msixbundle",
+
+    # =========================
+    # Shortcuts / link files
+    # =========================
+    ".lnk",
+    ".url",
+    ".scf",
+
+    # =========================
+    # Registry / configuration
+    # =========================
+    ".reg",
+
+    # =========================
+    # Disk images
+    # =========================
+    ".iso",
+    ".img",
+    ".vhd",
+    ".vhdx",
+
+    # =========================
+    # Office macro-enabled files
+    # =========================
+    ".docm",
+    ".dotm",
+    ".xlsm",
+    ".xltm",
+    ".xlam",
+    ".pptm",
+    ".potm",
+    ".ppsm",
+
+    # =========================
+    # HTML / web files
+    # =========================
+    ".hta",
+    ".html",
+    ".htm",
+
+    # =========================
+    # Potentially executable / script
+    # =========================
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".command",
+    ".py",
+    ".pyw",
+    ".rb",
+    ".pl",
+    ".php"
 ]
 
 
@@ -398,14 +874,64 @@ SUSPICIOUS_EXTENSIONS = [
 # =========================================================
 
 SUSPICIOUS_TLDS = [
+
+    # Commonly seen in abusive / disposable domains
     ".xyz",
     ".top",
     ".click",
     ".buzz",
+    ".work",
+    ".download",
+    ".stream",
+    ".win",
+    ".bid",
+    ".trade",
+    ".racing",
+    ".party",
+    ".review",
+    ".science",
+    ".live",
+    ".loan",
+
+    # Country-code / historically abused free-domain suffixes
     ".tk",
     ".ml",
     ".ga",
-    ".cf"
+    ".cf",
+    ".gq",
+
+    # Other TLDs worth treating as a weak signal
+    ".zip",
+    ".mov",
+    ".rest",
+    ".fit",
+    ".cam",
+    ".monster",
+    ".icu",
+    ".cyou",
+    ".wang",
+    ".link",
+    ".website",
+    ".online",
+    ".site",
+    ".space",
+    ".club",
+    ".fun",
+    ".today",
+    ".email",
+    ".support",
+    ".help",
+    ".cloud",
+    ".digital",
+    ".company",
+    ".services",
+    ".solutions",
+    ".network",
+    ".technology",
+    ".agency",
+    ".center",
+    ".social",
+    ".world"
 ]
 
 

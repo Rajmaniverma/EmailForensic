@@ -184,6 +184,7 @@ const runAnalysis = async () => {
     const result = await response.json();
 
     console.log("Full Analysis:", result);
+    
 
     if (!result.success || !result.data) {
       throw new Error("Invalid analysis response");

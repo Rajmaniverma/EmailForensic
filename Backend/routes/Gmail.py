@@ -9,7 +9,7 @@ from cachetools import TTLCache
 from sqlalchemy.dialects.mysql import insert
 from typing import Optional
 
-from fastapi import APIRouter, Request, Depends, HTTPException
+
 from sqlalchemy.orm import Session
 
 from google.oauth2.credentials import Credentials
