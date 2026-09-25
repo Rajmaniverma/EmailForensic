@@ -144,7 +144,7 @@ const Forensicreport = () => {
 
           <div className="w-12 h-12 border-4 border-t-blue-500 rounded-full animate-spin mx-auto mb-5"></div>
 
-          <h2 className="text-xl font-semibold">
+          <h2 className="text-xl font-semibold text-slate-900">
             Loading Forensic Report
           </h2>
 
@@ -260,23 +260,30 @@ const downloadPDF = async () => {
   }
 
   try {
-    console.log("Starting monochrome PDF generation...");
+    console.log("Starting color PDF generation...");
 
     if (document.fonts?.ready) {
       await document.fonts.ready;
     }
 
+    /*
+     * IMPORTANT:
+     * html2canvas can fail when it encounters modern CSS color functions
+     * such as oklch()/oklab(). We keep the original UI colors, but before
+     * rendering the cloned document we convert those functions to browser-
+     * computed rgb()/rgba() values.
+     */
     const canvas = await html2canvas(element, {
-      scale: Math.min(window.devicePixelRatio || 1, 1.5),
+      scale: 1.25,
       useCORS: true,
       allowTaint: false,
-      backgroundColor: null,
+      backgroundColor: "#ffffff",
       logging: false,
       imageTimeout: 15000,
       width: element.scrollWidth,
       height: element.scrollHeight,
-      windowWidth: element.scrollWidth,
-      windowHeight: element.scrollHeight,
+      windowWidth: Math.max(document.documentElement.clientWidth, element.scrollWidth),
+      windowHeight: Math.max(document.documentElement.clientHeight, element.scrollHeight),
 
       onclone: (clonedDocument) => {
         const clonedReport = clonedDocument.querySelector("#forensic-report");
@@ -285,133 +292,235 @@ const downloadPDF = async () => {
           throw new Error("Cloned forensic report was not found");
         }
 
-        // -------------------------------------------------
-        // IMPORTANT:
-        // Remove every external stylesheet. html2canvas can
-        // fail while parsing modern Tailwind color functions
-        // such as oklch()/oklab().
-        // -------------------------------------------------
-        clonedDocument
-          .querySelectorAll("link[rel='stylesheet']")
-          .forEach((link) => link.remove());
+        /*
+         * Convert one CSS color value using the browser itself.
+         * The browser understands oklch/oklab even when html2canvas does not.
+         */
+        const convertColor = (value) => {
+          const input = String(value || "").trim();
 
-        // -------------------------------------------------
-        // Rebuild all <style> tags without ANY color rules.
-        // This keeps layout, spacing, grid/flex, fonts, etc.
-        // but removes color/background/shadow declarations.
-        // -------------------------------------------------
-        const COLOR_PROPERTIES = new Set([
-          "color",
-          "background",
-          "background-color",
-          "background-image",
-          "border-color",
-          "border-top-color",
-          "border-right-color",
-          "border-bottom-color",
-          "border-left-color",
-          "outline-color",
-          "text-decoration-color",
-          "text-emphasis-color",
-          "column-rule-color",
-          "caret-color",
-          "accent-color",
-          "fill",
-          "stroke",
-          "stop-color",
-          "flood-color",
-          "lighting-color",
-          "marker",
-          "marker-start",
-          "marker-mid",
-          "marker-end",
-          "box-shadow",
-          "text-shadow",
-        ]);
+          if (!input) {
+            return input;
+          }
 
-        const UNSUPPORTED_COLOR_FUNCTIONS = [
-          "oklch(",
-          "oklab(",
-          "color-mix(",
-          "color(",
-          "lab(",
-          "lch(",
-        ];
+          const probe = clonedDocument.createElement("span");
+          probe.style.position = "absolute";
+          probe.style.left = "-99999px";
+          probe.style.top = "-99999px";
+          probe.style.color = "rgb(0, 0, 0)";
+          clonedDocument.body.appendChild(probe);
 
-        const shouldRemoveDeclaration = (property, value) => {
-          const prop = property.toLowerCase().trim();
-          const val = String(value || "").toLowerCase();
+          try {
+            probe.style.color = input;
+            const computed = clonedDocument.defaultView.getComputedStyle(probe).color;
 
-          if (COLOR_PROPERTIES.has(prop)) return true;
-          if (prop.startsWith("--color-")) return true;
-          if (prop.includes("shadow-color")) return true;
+            if (computed && computed !== "rgba(0, 0, 0, 0)") {
+              return computed;
+            }
 
-          return UNSUPPORTED_COLOR_FUNCTIONS.some((fn) =>
-            val.includes(fn)
-          );
+            // Try background-color for values that are not accepted as text color.
+            probe.style.color = "";
+            probe.style.backgroundColor = input;
+            const background = clonedDocument.defaultView
+              .getComputedStyle(probe)
+              .backgroundColor;
+
+            if (background && background !== "rgba(0, 0, 0, 0)") {
+              return background;
+            }
+          } catch (e) {
+            console.warn("Could not convert CSS color:", input, e);
+          } finally {
+            probe.remove();
+          }
+
+          /*
+           * If conversion fails, use a safe neutral fallback instead of
+           * allowing the unsupported function to reach html2canvas.
+           */
+          return "#000000";
         };
 
-        const sanitizeCssText = (cssText) => {
-          if (!cssText) return "";
+        /*
+         * Replace modern color functions in arbitrary CSS text while
+         * respecting nested parentheses.
+         */
+        const replaceColorFunctions = (cssText) => {
+          let output = "";
+          let i = 0;
 
-          // Remove CSS custom properties that contain colors.
-          let css = cssText.replace(
-            /(--[\w-]+)\s*:\s*[^;{}]*(?:;|(?=}))/gi,
-            (full, property) => {
-              if (property.toLowerCase().startsWith("--color-")) {
-                return "";
+          const functionNames = [
+            "color-mix",
+            "oklch",
+            "oklab",
+            "color",
+            "lch",
+            "lab",
+          ];
+
+          while (i < cssText.length) {
+            let matchedName = null;
+
+            for (const name of functionNames) {
+              const before = i === 0 ? "" : cssText[i - 1];
+              const segment = cssText.slice(i, i + name.length).toLowerCase();
+
+              if (
+                segment === name &&
+                (i === 0 || !/[a-z0-9_-]/i.test(before)) &&
+                cssText[i + name.length] === "("
+              ) {
+                matchedName = name;
+                break;
               }
-              return full;
             }
-          );
 
-          // Remove ordinary color/shadow declarations and any
-          // declaration containing unsupported color functions.
-          css = css.replace(
-            /([\w-]+)\s*:\s*([^;{}]+)(;|(?=}))/gi,
-            (full, property, value, terminator) => {
-              if (shouldRemoveDeclaration(property, value)) {
-                return "";
+            if (!matchedName) {
+              output += cssText[i];
+              i += 1;
+              continue;
+            }
+
+            const start = i;
+            let depth = 0;
+            let end = -1;
+
+            for (let j = i + matchedName.length; j < cssText.length; j++) {
+              const ch = cssText[j];
+
+              if (ch === "(") {
+                depth += 1;
+              } else if (ch === ")") {
+                depth -= 1;
+
+                if (depth === 0) {
+                  end = j + 1;
+                  break;
+                }
               }
-              return `${property}:${value}${terminator}`;
             }
-          );
 
-          return css;
+            if (end === -1) {
+              output += cssText[i];
+              i += 1;
+              continue;
+            }
+
+            const token = cssText.slice(start, end);
+            output += convertColor(token);
+            i = end;
+          }
+
+          return output;
         };
 
-        // Rebuild every style element from raw text after stripping
-        // color declarations. Raw text is used so html2canvas never
-        // receives the original Tailwind oklch declarations.
+        /*
+         * First convert all <style> blocks. This preserves the complete
+         * Tailwind layout/color design instead of deleting the colors.
+         */
         clonedDocument.querySelectorAll("style").forEach((style) => {
-          const sanitized = sanitizeCssText(style.textContent || "");
-          style.textContent = sanitized;
+          style.textContent = replaceColorFunctions(style.textContent || "");
         });
 
-        // Remove inline color declarations too.
-        clonedReport.querySelectorAll("*").forEach((node) => {
+        /*
+         * Also sanitize inline styles and CSS custom properties.
+         */
+        clonedDocument.querySelectorAll("*").forEach((node) => {
           if (!node.hasAttribute("style")) return;
 
-          const style = node.getAttribute("style") || "";
-          const sanitized = sanitizeCssText(style);
+          const originalStyle = node.getAttribute("style") || "";
+          node.setAttribute(
+            "style",
+            replaceColorFunctions(originalStyle)
+          );
+        });
 
-          if (sanitized.trim()) {
-            node.setAttribute("style", sanitized);
-          } else {
-            node.removeAttribute("style");
+        /*
+         * Sanitize linked stylesheets too. This is important because Tailwind
+         * can be delivered as a <link> stylesheet rather than a <style> tag.
+         * We modify every accessible CSS rule in the cloned document while
+         * preserving layout, typography, borders, gradients, and colors.
+         */
+        const sanitizeRuleList = (rules) => {
+          if (!rules) return;
+
+          for (let index = 0; index < rules.length; index += 1) {
+            const rule = rules[index];
+
+            try {
+              if (rule.style) {
+                const originalCss = rule.style.cssText || "";
+                const convertedCss = replaceColorFunctions(originalCss);
+
+                if (convertedCss !== originalCss) {
+                  rule.style.cssText = convertedCss;
+                }
+              }
+
+              if (rule.cssRules) {
+                sanitizeRuleList(rule.cssRules);
+              }
+            } catch (e) {
+              // Some browser-generated CSS rules are read-only. They can be
+              // ignored because html2canvas will still render the rest.
+              console.warn("Could not sanitize CSS rule:", e);
+            }
+          }
+        };
+
+        clonedDocument.querySelectorAll("style").forEach((style) => {
+          try {
+            sanitizeRuleList(style.sheet?.cssRules);
+          } catch (e) {
+            console.warn("Could not access style rules:", e);
           }
         });
 
-        // The report itself should be plain and printer-friendly.
-        clonedReport.style.setProperty("background", "none", "important");
-        clonedReport.style.setProperty("box-shadow", "none", "important");
+        clonedDocument
+          .querySelectorAll("link[rel='stylesheet']")
+          .forEach((link) => {
+            try {
+              const sheet = link.sheet;
 
-        // Hide interactive/navigation elements from the PDF.
+              if (sheet?.cssRules) {
+                sanitizeRuleList(sheet.cssRules);
+              } else {
+                // Cross-origin sheets cannot be safely inspected. Remove them
+                // rather than allowing html2canvas to parse unsupported CSS.
+                link.remove();
+              }
+            } catch (e) {
+              console.warn("Removing inaccessible stylesheet:", e);
+              link.remove();
+            }
+          });
+
+        /*
+         * Force a stable white report background for printing while keeping
+         * all other original colors.
+         */
+        clonedReport.style.backgroundColor = "#ffffff";
+        clonedReport.style.boxShadow = "none";
+
+        /*
+         * Hide navigation and buttons from the PDF.
+         */
         clonedReport
           .querySelectorAll("button, [data-pdf-hide='true']")
           .forEach((node) => {
             node.style.setProperty("display", "none", "important");
           });
+
+        /*
+         * Avoid sticky/fixed elements affecting the captured document.
+         */
+        clonedDocument.querySelectorAll("*").forEach((node) => {
+          const computed = clonedDocument.defaultView.getComputedStyle(node);
+
+          if (computed.position === "sticky" || computed.position === "fixed") {
+            node.style.position = "static";
+          }
+        });
       },
     });
 
@@ -421,8 +530,14 @@ const downloadPDF = async () => {
       throw new Error("PDF canvas is empty");
     }
 
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
-
+    /*
+     * IMPORTANT:
+     * Do NOT place one giant image on every PDF page with a negative Y
+     * position. That approach can produce blank/white pages.
+     *
+     * Instead, crop the canvas into exact A4-sized slices and put one slice
+     * on each PDF page.
+     */
     const pdf = new jsPDF({
       orientation: "portrait",
       unit: "mm",
@@ -433,39 +548,63 @@ const downloadPDF = async () => {
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
 
-    const imgWidth = pdfWidth;
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+    const pxPerMm = canvas.width / pdfWidth;
+    const pageHeightPx = Math.floor(pdfHeight * pxPerMm);
 
-    let heightLeft = imgHeight;
-    let position = 0;
+    let sourceY = 0;
+    let pageNumber = 0;
 
-    pdf.addImage(
-      imgData,
-      "JPEG",
-      0,
-      position,
-      imgWidth,
-      imgHeight,
-      undefined,
-      "FAST"
-    );
+    while (sourceY < canvas.height) {
+      const sliceHeightPx = Math.min(
+        pageHeightPx,
+        canvas.height - sourceY
+      );
 
-    heightLeft -= pdfHeight;
+      const pageCanvas = document.createElement("canvas");
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = sliceHeightPx;
 
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
+      const ctx = pageCanvas.getContext("2d");
+
+      if (!ctx) {
+        throw new Error("Could not create PDF page canvas");
+      }
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+
+      ctx.drawImage(
+        canvas,
+        0,
+        sourceY,
+        canvas.width,
+        sliceHeightPx,
+        0,
+        0,
+        canvas.width,
+        sliceHeightPx
+      );
+
+      const pageImage = pageCanvas.toDataURL("image/jpeg", 0.92);
+      const pageHeightMm = sliceHeightPx / pxPerMm;
+
+      if (pageNumber > 0) {
+        pdf.addPage();
+      }
+
       pdf.addImage(
-        imgData,
+        pageImage,
         "JPEG",
         0,
-        position,
-        imgWidth,
-        imgHeight,
+        0,
+        pdfWidth,
+        pageHeightMm,
         undefined,
         "FAST"
       );
-      heightLeft -= pdfHeight;
+
+      sourceY += sliceHeightPx;
+      pageNumber += 1;
     }
 
     const safeMessageId = String(messageId || "unknown")
@@ -476,9 +615,10 @@ const downloadPDF = async () => {
 
     pdf.save(`forensic-report-${safeMessageId}.pdf`);
 
-    console.log("Monochrome PDF downloaded successfully");
+    console.log(`PDF downloaded successfully: ${pageNumber} page(s)`);
   } catch (error) {
     console.error("PDF generation failed:", error);
+
     alert(
       `Failed to generate PDF: ${
         error?.message || "Unknown error"
@@ -486,12 +626,27 @@ const downloadPDF = async () => {
     );
   }
 };
+
   // =====================================================
   // RISK COLOR
   // =====================================================
 
   const getRiskClass = () => {
-    return "border rounded-xl px-4 py-3 text-center";
+    const risk = String(riskLevel || "").toLowerCase();
+
+    if (risk.includes("high") || risk.includes("critical")) {
+      return "border border-red-300 bg-red-50 text-red-700 rounded-xl px-4 py-3 text-center";
+    }
+
+    if (risk.includes("medium")) {
+      return "border border-amber-300 bg-amber-50 text-amber-700 rounded-xl px-4 py-3 text-center";
+    }
+
+    if (risk.includes("low") || risk.includes("safe")) {
+      return "border border-green-300 bg-green-50 text-green-700 rounded-xl px-4 py-3 text-center";
+    }
+
+    return "border border-slate-300 bg-slate-50 text-slate-700 rounded-xl px-4 py-3 text-center";
   };
 
   // =====================================================
@@ -499,19 +654,19 @@ const downloadPDF = async () => {
   // =====================================================
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-slate-50">
 
       {/* =================================================
           TOP NAVIGATION
       ================================================= */}
 
-      <div data-pdf-hide="true" className="sticky top-0 z-50 shadow-lg">
+      <div data-pdf-hide="true" className="sticky top-0 z-50 bg-slate-900 text-white shadow-lg">
 
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
 
           <div>
 
-            <h1 className="text-xl font-bold">
+            <h1 className="text-xl font-bold text-white">
               MailGuard
             </h1>
 
@@ -527,7 +682,7 @@ const downloadPDF = async () => {
               onClick={() =>
                 navigate(-1)
               }
-              className="px-4 py-2 rounded-lg border hover: text-sm"
+              className="px-4 py-2 rounded-lg border border-slate-600 hover:bg-slate-800 text-sm"
             >
               ← Back
             </button>
@@ -535,7 +690,7 @@ const downloadPDF = async () => {
             <button
               data-pdf-hide="true"
               onClick={downloadPDF}
-              className="px-5 py-2 rounded-lg hover: text-sm font-semibold shadow"
+              className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow"
             >
               ↓ Download PDF
             </button>
@@ -554,7 +709,7 @@ const downloadPDF = async () => {
       <div
         ref={reportRef}
         id="forensic-report"
-        className="max-w-6xl mx-auto my-8 shadow-xl"
+        className="max-w-6xl mx-auto my-8 bg-white shadow-xl rounded-2xl overflow-hidden"
       >
 
         {/* =================================================
@@ -567,11 +722,11 @@ const downloadPDF = async () => {
 
             <div>
 
-              <p className="text-sm font-semibold uppercase tracking-wider">
+              <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">
                 Digital Forensic Report
               </p>
 
-              <h2 className="text-3xl font-bold mt-2">
+              <h2 className="text-3xl font-bold mt-2 text-slate-900">
                 Email Security & Forensic Analysis
               </h2>
 
@@ -610,7 +765,7 @@ const downloadPDF = async () => {
 
         <section className="p-10">
 
-          <h3 className="text-xl font-bold mb-5">
+          <h3 className="text-xl font-bold mb-5 text-slate-900">
             Executive Summary
           </h3>
 
@@ -622,7 +777,7 @@ const downloadPDF = async () => {
                 Threat Score
               </p>
 
-              <p className="text-3xl font-bold mt-2">
+              <p className="text-3xl font-bold mt-2 text-slate-900">
                 {threatScore}
               </p>
 
@@ -639,7 +794,7 @@ const downloadPDF = async () => {
                 Safety Score
               </p>
 
-              <p className="text-3xl font-bold mt-2">
+              <p className="text-3xl font-bold mt-2 text-slate-900">
                 {safeScore}
               </p>
 
@@ -656,7 +811,7 @@ const downloadPDF = async () => {
                 URLs Detected
               </p>
 
-              <p className="text-3xl font-bold mt-2">
+              <p className="text-3xl font-bold mt-2 text-slate-900">
                 {email?.urls?.length || 0}
               </p>
 
@@ -673,7 +828,7 @@ const downloadPDF = async () => {
 
         <section className="px-10 pb-10">
 
-          <h3 className="text-xl font-bold mb-5">
+          <h3 className="text-xl font-bold mb-5 text-slate-900">
             Email Information
           </h3>
 
@@ -743,7 +898,7 @@ const downloadPDF = async () => {
 
         <section className="px-10 pb-10">
 
-          <h3 className="text-xl font-bold mb-5">
+          <h3 className="text-xl font-bold mb-5 text-slate-900">
             Email Authentication
           </h3>
 
@@ -781,7 +936,7 @@ const downloadPDF = async () => {
 
         <section className="px-10 pb-10">
 
-          <h3 className="text-xl font-bold mb-5">
+          <h3 className="text-xl font-bold mb-5 text-slate-900">
             AI Threat Analysis
           </h3>
 
@@ -894,7 +1049,7 @@ const downloadPDF = async () => {
 
         <section className="px-10 pb-10">
 
-          <h3 className="text-xl font-bold mb-5">
+          <h3 className="text-xl font-bold mb-5 text-slate-900">
             Phishing Analysis
           </h3>
 
@@ -919,7 +1074,7 @@ const downloadPDF = async () => {
 
         <section className="px-10 pb-10">
 
-          <h3 className="text-xl font-bold mb-5">
+          <h3 className="text-xl font-bold mb-5 text-slate-900">
             Social Engineering Analysis
           </h3>
 
@@ -944,7 +1099,7 @@ const downloadPDF = async () => {
 
         <section className="px-10 pb-10">
 
-          <h3 className="text-xl font-bold mb-5">
+          <h3 className="text-xl font-bold mb-5 text-slate-900">
             URL Analysis
           </h3>
 
@@ -992,7 +1147,7 @@ const downloadPDF = async () => {
 
         <section className="px-10 pb-10">
 
-          <h3 className="text-xl font-bold mb-5">
+          <h3 className="text-xl font-bold mb-5 text-slate-900">
             IP Forensics
           </h3>
 
@@ -1047,8 +1202,8 @@ const downloadPDF = async () => {
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-semibold ${
                             record?.success
-                              ? " "
-                              : " "
+                              ? "bg-green-100 text-green-700 border-green-300"
+                              : "bg-red-100 text-red-700 border-red-300"
                           }`}
                         >
                           {record?.success
@@ -1256,8 +1411,8 @@ const downloadPDF = async () => {
                             <div
                               className={`p-4 rounded-lg border ${
                                 anon?.is_anonymized
-                                  ? " "
-                                  : " "
+                                  ? "bg-red-50 border-red-300 text-red-700"
+                                  : "bg-green-50 border-green-300 text-green-700"
                               }`}
                             >
 
@@ -1270,8 +1425,8 @@ const downloadPDF = async () => {
                                 <span
                                   className={`text-sm font-bold ${
                                     anon?.is_anonymized
-                                      ? ""
-                                      : ""
+                                      ? "text-red-600"
+                                      : "text-green-600"
                                   }`}
                                 >
                                   {anon?.is_anonymized
@@ -1355,7 +1510,7 @@ const downloadPDF = async () => {
 
         <section className="px-10 pb-10">
 
-          <h3 className="text-xl font-bold mb-5">
+          <h3 className="text-xl font-bold mb-5 text-slate-900">
             ML Detection Features
           </h3>
 
@@ -1396,7 +1551,7 @@ const downloadPDF = async () => {
 
         <section className="px-10 pb-10">
 
-          <h3 className="text-xl font-bold mb-5">
+          <h3 className="text-xl font-bold mb-5 text-slate-900">
             Email Content
           </h3>
 
@@ -1416,7 +1571,7 @@ const downloadPDF = async () => {
             FOOTER
         ================================================= */}
 
-        <div className="border-t px-10 py-6">
+        <div className="border-t border-slate-200 bg-slate-50 px-10 py-6">
 
           <div className="flex justify-between text-xs">
 
@@ -1494,8 +1649,8 @@ const AuthCard = ({
         <span
           className={`px-2 py-1 rounded text-xs font-semibold ${
             result
-              ? " "
-              : " "
+              ? "bg-green-100 text-green-700"
+              : "bg-gray-100 text-gray-500"
           }`}
         >
           {result
@@ -1539,8 +1694,8 @@ const AnalysisItem = ({
     <span
       className={`px-2.5 py-1 rounded-md text-xs font-semibold ${
         value
-          ? " "
-          : " "
+          ? "bg-red-100 text-red-700"
+          : "bg-green-100 text-green-700"
       }`}
     >
       {value
@@ -1571,8 +1726,8 @@ const Detection = ({
     <span
       className={`text-xs font-bold ${
         value
-          ? ""
-          : ""
+          ? "text-red-600"
+          : "text-green-600"
       }`}
     >
       {value
