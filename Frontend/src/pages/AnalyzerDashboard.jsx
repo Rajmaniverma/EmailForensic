@@ -304,8 +304,9 @@ const city =
     navigate(`${path}?message_id=${encodeURIComponent(messageId || "")}`);
   };
   const report = (path) => {
-    navigate(`${path}?message_id=${encodeURIComponent(messageId || "")}`);
-  };
+  navigate(`${path}?message_id=${encodeURIComponent(messageId || "")}`);
+};
+
 
   // ------------------------------------------------------------
   // LOADING
@@ -335,7 +336,9 @@ const city =
           <PageHeader
             navigate={navigate}
             onAnalyze={runFullAnalysis}
+            onReport={() => report("/Forensicreport")}
             analyzing={analyzing}
+
           />
 
           {error && (
@@ -766,6 +769,7 @@ const city =
             onClick={() => openTool("/ip-tracing")}
           />
         </div>
+        
 
         {/* Bottom information bar */}
         <div className="rounded-xl bg-[#e8f1ff] border border-[#c7dbf5] px-4 py-3 flex items-center gap-3">
@@ -787,7 +791,7 @@ const city =
 // HEADER
 // ============================================================
 
-function PageHeader({ navigate, onAnalyze, analyzing, progress }) {
+function PageHeader({ navigate, onAnalyze, analyzing, progress ,   onReport }) {
   return (
     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5 mb-6">
       <div>
@@ -807,7 +811,7 @@ function PageHeader({ navigate, onAnalyze, analyzing, progress }) {
           ← Back
         </button>
         <button
-          onClick={() => report("/Forensicreport")}
+          onClick={onReport}
           className="px-5 py-2.5 rounded-xl bg-[#2563eb] text-white text-sm font-semibold shadow-sm hover:bg-[#1d4ed8] disabled:opacity-60 hover:scale-105 active:scale-95 cursor-pointer"
         >
           Forensic Report
