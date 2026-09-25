@@ -5,276 +5,6 @@ import jsPDF from "jspdf";
 
 const API_URL = "https://emailforensic.onrender.com";
 
-// =========================================================
-// PDF CSS SANITIZER
-// Converts modern CSS colors such as oklch()/oklab()
-// into browser-computed RGB values inside html2canvas's
-// cloned document only.
-// =========================================================
-
-const hasUnsupportedColorFunction = (value) => {
-  if (!value) return false;
-
-  return (
-    value.includes("oklch(") ||
-    value.includes("oklab(")
-  );
-};
-
-const convertCssValue = (
-  clonedDocument,
-  property,
-  value
-) => {
-  if (!hasUnsupportedColorFunction(value)) {
-    return value;
-  }
-
-  try {
-    const probe =
-      clonedDocument.createElement("div");
-
-    probe.style.setProperty(
-      property,
-      value
-    );
-
-    clonedDocument.body.appendChild(probe);
-
-    const computed =
-      clonedDocument.defaultView
-        ?.getComputedStyle(probe)
-        ?.getPropertyValue(property);
-
-    probe.remove();
-
-    if (
-      computed &&
-      !hasUnsupportedColorFunction(computed)
-    ) {
-      return computed;
-    }
-  } catch (error) {
-    console.warn(
-      `Could not convert CSS property ${property}:`,
-      error
-    );
-  }
-
-  return null;
-};
-
-const sanitizeCssRules = (
-  clonedDocument,
-  rules
-) => {
-  if (!rules) return;
-
-  for (let i = 0; i < rules.length; i++) {
-    const rule = rules[i];
-
-    try {
-      // Normal CSS rules, keyframes, etc.
-      if (rule.style) {
-        for (
-          let j = 0;
-          j < rule.style.length;
-          j++
-        ) {
-          const property =
-            rule.style[j];
-
-          const value =
-            rule.style.getPropertyValue(
-              property
-            );
-
-          if (
-            hasUnsupportedColorFunction(value)
-          ) {
-            const converted =
-              convertCssValue(
-                clonedDocument,
-                property,
-                value
-              );
-
-            if (converted) {
-              rule.style.setProperty(
-                property,
-                converted,
-                rule.style.getPropertyPriority(
-                  property
-                )
-              );
-            } else {
-              // Last-resort fallback.
-              // This prevents html2canvas from
-              // seeing oklch/oklab.
-              rule.style.setProperty(
-                property,
-                value
-                  .replace(
-                    /oklch\([^)]*\)/gi,
-                    "rgb(0, 0, 0)"
-                  )
-                  .replace(
-                    /oklab\([^)]*\)/gi,
-                    "rgb(0, 0, 0)"
-                  )
-              );
-            }
-          }
-        }
-      }
-
-      // Media queries, supports queries, layers, etc.
-      if (rule.cssRules) {
-        sanitizeCssRules(
-          clonedDocument,
-          rule.cssRules
-        );
-      }
-    } catch (error) {
-      console.warn(
-        "Could not sanitize CSS rule:",
-        error
-      );
-    }
-  }
-};
-
-const sanitizeClonedDocumentForPDF = (
-  clonedDocument
-) => {
-  // -------------------------------------------------------
-  // 1. Convert colors in <style> / stylesheet rules
-  // -------------------------------------------------------
-
-  for (
-    const stylesheet of clonedDocument.styleSheets
-  ) {
-    try {
-      if (stylesheet.cssRules) {
-        sanitizeCssRules(
-          clonedDocument,
-          stylesheet.cssRules
-        );
-      }
-    } catch (error) {
-      // Cross-origin stylesheets can throw a
-      // SecurityError when cssRules is accessed.
-      console.warn(
-        "Skipping inaccessible stylesheet:",
-        error
-      );
-    }
-  }
-
-  // -------------------------------------------------------
-  // 2. Sanitize inline styles
-  // -------------------------------------------------------
-
-  const allElements =
-    clonedDocument.querySelectorAll("*");
-
-  allElements.forEach((element) => {
-    const style = element.style;
-
-    if (!style) return;
-
-    for (
-      let i = style.length - 1;
-      i >= 0;
-      i--
-    ) {
-      const property = style[i];
-
-      const value =
-        style.getPropertyValue(property);
-
-      if (
-        hasUnsupportedColorFunction(value)
-      ) {
-        const converted =
-          convertCssValue(
-            clonedDocument,
-            property,
-            value
-          );
-
-        if (converted) {
-          style.setProperty(
-            property,
-            converted,
-            style.getPropertyPriority(
-              property
-            )
-          );
-        } else {
-          style.setProperty(
-            property,
-            value
-              .replace(
-                /oklch\([^)]*\)/gi,
-                "rgb(0, 0, 0)"
-              )
-              .replace(
-                /oklab\([^)]*\)/gi,
-                "rgb(0, 0, 0)"
-              )
-          );
-        }
-      }
-    }
-  });
-
-  // -------------------------------------------------------
-  // 3. Sanitize CSS custom properties
-  // -------------------------------------------------------
-
-  allElements.forEach((element) => {
-    const style =
-      element.style;
-
-    if (!style) return;
-
-    for (
-      let i = 0;
-      i < style.length;
-      i++
-    ) {
-      const property = style[i];
-
-      if (!property.startsWith("--")) {
-        continue;
-      }
-
-      const value =
-        style.getPropertyValue(property);
-
-      if (
-        hasUnsupportedColorFunction(value)
-      ) {
-        const converted =
-          convertCssValue(
-            clonedDocument,
-            property,
-            value
-          );
-
-        if (converted) {
-          style.setProperty(
-            property,
-            converted
-          );
-        }
-      }
-    }
-  });
-};
-
-
 const Forensicreport = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -408,17 +138,17 @@ const Forensicreport = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
 
         <div className="text-center">
 
-          <div className="w-12 h-12 border-4 border-slate-600 border-t-blue-500 rounded-full animate-spin mx-auto mb-5"></div>
+          <div className="w-12 h-12 border-4 border-t-blue-500 rounded-full animate-spin mx-auto mb-5"></div>
 
           <h2 className="text-xl font-semibold">
             Loading Forensic Report
           </h2>
 
-          <p className="text-sm text-slate-400 mt-2">
+          <p className="text-sm mt-2">
             Retrieving analysis from cache...
           </p>
 
@@ -434,7 +164,7 @@ const Forensicreport = () => {
 
   if (error || !report) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
+      <div className="min-h-screen flex items-center justify-center px-6">
 
         <div className="text-center max-w-md">
 
@@ -446,7 +176,7 @@ const Forensicreport = () => {
             Forensic Report Unavailable
           </h2>
 
-          <p className="text-slate-400 mb-6">
+          <p className="mb-6">
             {error ||
               "No forensic analysis was found."}
           </p>
@@ -455,7 +185,7 @@ const Forensicreport = () => {
 
             <button
               onClick={() => navigate(-1)}
-              className="px-5 py-2 rounded-lg border border-slate-600 hover:bg-slate-800"
+              className="px-5 py-2 rounded-lg border hover:"
             >
               ← Back
             </button>
@@ -464,7 +194,7 @@ const Forensicreport = () => {
               onClick={() =>
                 navigate("/dashboard")
               }
-              className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700"
+              className="px-5 py-2 rounded-lg hover:"
             >
               Dashboard
             </button>
@@ -530,112 +260,168 @@ const downloadPDF = async () => {
   }
 
   try {
-    console.log("Starting PDF generation...");
+    console.log("Starting monochrome PDF generation...");
 
-    // Make sure fonts/layout have finished before capture.
     if (document.fonts?.ready) {
       await document.fonts.ready;
     }
 
-    const canvas = await html2canvas(
-      element,
-      {
-        scale: Math.min(
-          window.devicePixelRatio || 1,
-          1.5
-        ),
+    const canvas = await html2canvas(element, {
+      scale: Math.min(window.devicePixelRatio || 1, 1.5),
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: null,
+      logging: false,
+      imageTimeout: 15000,
+      width: element.scrollWidth,
+      height: element.scrollHeight,
+      windowWidth: element.scrollWidth,
+      windowHeight: element.scrollHeight,
 
-        useCORS: true,
-        allowTaint: false,
+      onclone: (clonedDocument) => {
+        const clonedReport = clonedDocument.querySelector("#forensic-report");
 
-        backgroundColor: "#ffffff",
+        if (!clonedReport) {
+          throw new Error("Cloned forensic report was not found");
+        }
 
-        logging: false,
+        // -------------------------------------------------
+        // IMPORTANT:
+        // Remove every external stylesheet. html2canvas can
+        // fail while parsing modern Tailwind color functions
+        // such as oklch()/oklab().
+        // -------------------------------------------------
+        clonedDocument
+          .querySelectorAll("link[rel='stylesheet']")
+          .forEach((link) => link.remove());
 
-        imageTimeout: 15000,
+        // -------------------------------------------------
+        // Rebuild all <style> tags without ANY color rules.
+        // This keeps layout, spacing, grid/flex, fonts, etc.
+        // but removes color/background/shadow declarations.
+        // -------------------------------------------------
+        const COLOR_PROPERTIES = new Set([
+          "color",
+          "background",
+          "background-color",
+          "background-image",
+          "border-color",
+          "border-top-color",
+          "border-right-color",
+          "border-bottom-color",
+          "border-left-color",
+          "outline-color",
+          "text-decoration-color",
+          "text-emphasis-color",
+          "column-rule-color",
+          "caret-color",
+          "accent-color",
+          "fill",
+          "stroke",
+          "stop-color",
+          "flood-color",
+          "lighting-color",
+          "marker",
+          "marker-start",
+          "marker-mid",
+          "marker-end",
+          "box-shadow",
+          "text-shadow",
+        ]);
 
-        // Keep the capture dimensions equal to
-        // the actual report element.
-        width: element.scrollWidth,
-        height: element.scrollHeight,
+        const UNSUPPORTED_COLOR_FUNCTIONS = [
+          "oklch(",
+          "oklab(",
+          "color-mix(",
+          "color(",
+          "lab(",
+          "lch(",
+        ];
 
-        windowWidth:
-          element.scrollWidth,
+        const shouldRemoveDeclaration = (property, value) => {
+          const prop = property.toLowerCase().trim();
+          const val = String(value || "").toLowerCase();
 
-        windowHeight:
-          element.scrollHeight,
+          if (COLOR_PROPERTIES.has(prop)) return true;
+          if (prop.startsWith("--color-")) return true;
+          if (prop.includes("shadow-color")) return true;
 
-        onclone: (clonedDocument) => {
-          console.log(
-            "Sanitizing cloned document for PDF..."
+          return UNSUPPORTED_COLOR_FUNCTIONS.some((fn) =>
+            val.includes(fn)
+          );
+        };
+
+        const sanitizeCssText = (cssText) => {
+          if (!cssText) return "";
+
+          // Remove CSS custom properties that contain colors.
+          let css = cssText.replace(
+            /(--[\w-]+)\s*:\s*[^;{}]*(?:;|(?=}))/gi,
+            (full, property) => {
+              if (property.toLowerCase().startsWith("--color-")) {
+                return "";
+              }
+              return full;
+            }
           );
 
-          // IMPORTANT:
-          // Do NOT remove Tailwind stylesheets.
-          // html2canvas needs them for layout.
-          //
-          // Instead, convert oklch()/oklab()
-          // declarations to computed RGB values.
-          sanitizeClonedDocumentForPDF(
-            clonedDocument
+          // Remove ordinary color/shadow declarations and any
+          // declaration containing unsupported color functions.
+          css = css.replace(
+            /([\w-]+)\s*:\s*([^;{}]+)(;|(?=}))/gi,
+            (full, property, value, terminator) => {
+              if (shouldRemoveDeclaration(property, value)) {
+                return "";
+              }
+              return `${property}:${value}${terminator}`;
+            }
           );
 
-          const clonedReport =
-            clonedDocument.querySelector(
-              "#forensic-report"
-            );
+          return css;
+        };
 
-          if (!clonedReport) {
-            console.warn(
-              "Forensic report was not found in clone."
-            );
-            return;
+        // Rebuild every style element from raw text after stripping
+        // color declarations. Raw text is used so html2canvas never
+        // receives the original Tailwind oklch declarations.
+        clonedDocument.querySelectorAll("style").forEach((style) => {
+          const sanitized = sanitizeCssText(style.textContent || "");
+          style.textContent = sanitized;
+        });
+
+        // Remove inline color declarations too.
+        clonedReport.querySelectorAll("*").forEach((node) => {
+          if (!node.hasAttribute("style")) return;
+
+          const style = node.getAttribute("style") || "";
+          const sanitized = sanitizeCssText(style);
+
+          if (sanitized.trim()) {
+            node.setAttribute("style", sanitized);
+          } else {
+            node.removeAttribute("style");
           }
+        });
 
-          // Remove only things that should not appear
-          // in the PDF.
-          const pdfHiddenElements =
-            clonedReport.querySelectorAll(
-              "[data-pdf-hide='true']"
-            );
+        // The report itself should be plain and printer-friendly.
+        clonedReport.style.setProperty("background", "none", "important");
+        clonedReport.style.setProperty("box-shadow", "none", "important");
 
-          pdfHiddenElements.forEach(
-            (item) => item.remove()
-          );
+        // Hide interactive/navigation elements from the PDF.
+        clonedReport
+          .querySelectorAll("button, [data-pdf-hide='true']")
+          .forEach((node) => {
+            node.style.setProperty("display", "none", "important");
+          });
+      },
+    });
 
-          // Make sure the report has a white background.
-          clonedReport.style.background =
-            "#ffffff";
+    console.log("Canvas created:", canvas.width, canvas.height);
 
-          clonedReport.style.color =
-            "#0f172a";
+    if (!canvas.width || !canvas.height) {
+      throw new Error("PDF canvas is empty");
+    }
 
-          console.log(
-            "PDF clone sanitized successfully."
-          );
-        },
-      }
-    );
-
-    console.log(
-      "Canvas created:",
-      canvas.width,
-      canvas.height
-    );
-
-    // ---------------------------------------------------
-    // Canvas -> JPEG
-    // ---------------------------------------------------
-
-    const imgData =
-      canvas.toDataURL(
-        "image/jpeg",
-        0.92
-      );
-
-    // ---------------------------------------------------
-    // Create PDF
-    // ---------------------------------------------------
+    const imgData = canvas.toDataURL("image/jpeg", 0.95);
 
     const pdf = new jsPDF({
       orientation: "portrait",
@@ -644,25 +430,14 @@ const downloadPDF = async () => {
       compress: true,
     });
 
-    const pdfWidth =
-      pdf.internal.pageSize.getWidth();
-
-    const pdfHeight =
-      pdf.internal.pageSize.getHeight();
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
 
     const imgWidth = pdfWidth;
-
-    const imgHeight =
-      (canvas.height * pdfWidth) /
-      canvas.width;
+    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
     let heightLeft = imgHeight;
-
     let position = 0;
-
-    // ---------------------------------------------------
-    // First page
-    // ---------------------------------------------------
 
     pdf.addImage(
       imgData,
@@ -677,16 +452,9 @@ const downloadPDF = async () => {
 
     heightLeft -= pdfHeight;
 
-    // ---------------------------------------------------
-    // Additional pages
-    // ---------------------------------------------------
-
     while (heightLeft > 0) {
-      position =
-        heightLeft - imgHeight;
-
+      position = heightLeft - imgHeight;
       pdf.addPage();
-
       pdf.addImage(
         imgData,
         "JPEG",
@@ -697,91 +465,33 @@ const downloadPDF = async () => {
         undefined,
         "FAST"
       );
-
       heightLeft -= pdfHeight;
     }
 
-    // ---------------------------------------------------
-    // Safe filename
-    // ---------------------------------------------------
+    const safeMessageId = String(messageId || "unknown")
+      .replace(/[<>:"/\\|?*]/g, "_")
+      .replace(/\s+/g, "_")
+      .replace(/_+/g, "_")
+      .substring(0, 100);
 
-    const safeMessageId =
-      String(messageId || "unknown")
-        .replace(
-          /[<>:"/\\|?*]/g,
-          "_"
-        )
-        .replace(
-          /\s+/g,
-          "_"
-        )
-        .replace(
-          /_+/g,
-          "_"
-        )
-        .substring(0, 100);
+    pdf.save(`forensic-report-${safeMessageId}.pdf`);
 
-    const fileName =
-      `forensic-report-${safeMessageId}.pdf`;
-
-    console.log(
-      "Saving PDF:",
-      fileName
-    );
-
-    pdf.save(fileName);
-
-    console.log(
-      "PDF downloaded successfully."
-    );
-
+    console.log("Monochrome PDF downloaded successfully");
   } catch (error) {
-    console.error(
-      "PDF generation failed:",
-      error
-    );
-
+    console.error("PDF generation failed:", error);
     alert(
       `Failed to generate PDF: ${
-        error?.message ||
-        "Unknown error"
+        error?.message || "Unknown error"
       }`
     );
   }
 };
-
-
   // =====================================================
   // RISK COLOR
   // =====================================================
 
   const getRiskClass = () => {
-
-    switch (
-      riskLevel.toLowerCase()
-    ) {
-
-      case "high":
-      case "critical":
-        return (
-          "bg-red-100 text-red-700 border-red-200"
-        );
-
-      case "medium":
-        return (
-          "bg-yellow-100 text-yellow-700 border-yellow-200"
-        );
-
-      case "low":
-        return (
-          "bg-green-100 text-green-700 border-green-200"
-        );
-
-      default:
-        return (
-          "bg-gray-100 text-gray-700 border-gray-200"
-        );
-    }
+    return "border rounded-xl px-4 py-3 text-center";
   };
 
   // =====================================================
@@ -789,13 +499,13 @@ const downloadPDF = async () => {
   // =====================================================
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
+    <div className="min-h-screen">
 
       {/* =================================================
           TOP NAVIGATION
       ================================================= */}
 
-      <div className="sticky top-0 z-50 bg-slate-950 text-white shadow-lg">
+      <div data-pdf-hide="true" className="sticky top-0 z-50 shadow-lg">
 
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
 
@@ -805,7 +515,7 @@ const downloadPDF = async () => {
               MailGuard
             </h1>
 
-            <p className="text-xs text-slate-400">
+            <p className="text-xs">
               Digital Forensic Intelligence
             </p>
 
@@ -817,14 +527,15 @@ const downloadPDF = async () => {
               onClick={() =>
                 navigate(-1)
               }
-              className="px-4 py-2 rounded-lg border border-slate-600 hover:bg-slate-800 text-sm"
+              className="px-4 py-2 rounded-lg border hover: text-sm"
             >
               ← Back
             </button>
 
             <button
+              data-pdf-hide="true"
               onClick={downloadPDF}
-              className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-sm font-semibold shadow"
+              className="px-5 py-2 rounded-lg hover: text-sm font-semibold shadow"
             >
               ↓ Download PDF
             </button>
@@ -843,20 +554,20 @@ const downloadPDF = async () => {
       <div
         ref={reportRef}
         id="forensic-report"
-        className="max-w-6xl mx-auto bg-white my-8 shadow-xl"
+        className="max-w-6xl mx-auto my-8 shadow-xl"
       >
 
         {/* =================================================
             HEADER
         ================================================= */}
 
-        <div className="px-10 py-8 border-b border-slate-200">
+        <div className="px-10 py-8 border-b">
 
           <div className="flex justify-between items-start">
 
             <div>
 
-              <p className="text-sm font-semibold text-blue-600 uppercase tracking-wider">
+              <p className="text-sm font-semibold uppercase tracking-wider">
                 Digital Forensic Report
               </p>
 
@@ -864,11 +575,11 @@ const downloadPDF = async () => {
                 Email Security & Forensic Analysis
               </h2>
 
-              <p className="text-slate-500 mt-2">
+              <p className="mt-2">
                 Automated analysis report generated by MailGuard
               </p>
 
-              <p className="text-xs text-slate-400 mt-3 break-all">
+              <p className="text-xs mt-3 break-all">
                 Message ID: {messageId}
               </p>
 
@@ -907,15 +618,15 @@ const downloadPDF = async () => {
 
             <div className="border rounded-xl p-5">
 
-              <p className="text-sm text-slate-500">
+              <p className="text-sm">
                 Threat Score
               </p>
 
-              <p className="text-3xl font-bold text-red-600 mt-2">
+              <p className="text-3xl font-bold mt-2">
                 {threatScore}
               </p>
 
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs mt-1">
                 / 100
               </p>
 
@@ -924,15 +635,15 @@ const downloadPDF = async () => {
 
             <div className="border rounded-xl p-5">
 
-              <p className="text-sm text-slate-500">
+              <p className="text-sm">
                 Safety Score
               </p>
 
-              <p className="text-3xl font-bold text-green-600 mt-2">
+              <p className="text-3xl font-bold mt-2">
                 {safeScore}
               </p>
 
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs mt-1">
                 / 100
               </p>
 
@@ -941,11 +652,11 @@ const downloadPDF = async () => {
 
             <div className="border rounded-xl p-5">
 
-              <p className="text-sm text-slate-500">
+              <p className="text-sm">
                 URLs Detected
               </p>
 
-              <p className="text-3xl font-bold text-blue-600 mt-2">
+              <p className="text-3xl font-bold mt-2">
                 {email?.urls?.length || 0}
               </p>
 
@@ -1074,7 +785,7 @@ const downloadPDF = async () => {
             AI Threat Analysis
           </h3>
 
-          <div className="border rounded-xl p-6 bg-slate-50">
+          <div className="border rounded-xl p-6">
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -1158,7 +869,7 @@ const downloadPDF = async () => {
 
                       <li
                         key={index}
-                        className="text-sm bg-white border rounded-lg p-3"
+                        className="text-sm border rounded-lg p-3"
                       >
                         • {reason}
                       </li>
@@ -1187,9 +898,9 @@ const downloadPDF = async () => {
             Phishing Analysis
           </h3>
 
-          <div className="border rounded-xl p-6 bg-slate-50">
+          <div className="border rounded-xl p-6">
 
-            <pre className="whitespace-pre-wrap text-sm text-slate-700">
+            <pre className="whitespace-pre-wrap text-sm">
               {JSON.stringify(
                 report?.phishing || {},
                 null,
@@ -1212,9 +923,9 @@ const downloadPDF = async () => {
             Social Engineering Analysis
           </h3>
 
-          <div className="border rounded-xl p-6 bg-slate-50">
+          <div className="border rounded-xl p-6">
 
-            <pre className="whitespace-pre-wrap text-sm text-slate-700">
+            <pre className="whitespace-pre-wrap text-sm">
               {JSON.stringify(
                 report?.social || {},
                 null,
@@ -1249,11 +960,11 @@ const downloadPDF = async () => {
                     className="p-4 border-b last:border-b-0"
                   >
 
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs">
                       URL {index + 1}
                     </p>
 
-                    <p className="text-sm text-blue-600 break-all mt-1">
+                    <p className="text-sm break-all mt-1">
                       {url}
                     </p>
 
@@ -1264,7 +975,7 @@ const downloadPDF = async () => {
 
             ) : (
 
-              <div className="p-5 text-slate-500">
+              <div className="p-5">
                 No URLs detected.
               </div>
 
@@ -1318,11 +1029,11 @@ const downloadPDF = async () => {
 
                       {/* IP HEADER */}
 
-                      <div className="bg-slate-900 text-white px-5 py-4 flex justify-between items-center">
+                      <div className="px-5 py-4 flex justify-between items-center">
 
                         <div>
 
-                          <p className="text-xs text-slate-400">
+                          <p className="text-xs">
                             IP RECORD {index + 1}
                           </p>
 
@@ -1336,8 +1047,8 @@ const downloadPDF = async () => {
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-semibold ${
                             record?.success
-                              ? "bg-green-500/20 text-green-300"
-                              : "bg-red-500/20 text-red-300"
+                              ? " "
+                              : " "
                           }`}
                         >
                           {record?.success
@@ -1480,9 +1191,9 @@ const downloadPDF = async () => {
 
                           {classification?.reason && (
 
-                            <div className="mt-3 p-4 bg-slate-50 border rounded-lg">
+                            <div className="mt-3 p-4 border rounded-lg">
 
-                              <p className="text-xs uppercase text-slate-400">
+                              <p className="text-xs uppercase">
                                 Classification Reason
                               </p>
 
@@ -1545,8 +1256,8 @@ const downloadPDF = async () => {
                             <div
                               className={`p-4 rounded-lg border ${
                                 anon?.is_anonymized
-                                  ? "bg-red-50 border-red-200"
-                                  : "bg-green-50 border-green-200"
+                                  ? " "
+                                  : " "
                               }`}
                             >
 
@@ -1559,8 +1270,8 @@ const downloadPDF = async () => {
                                 <span
                                   className={`text-sm font-bold ${
                                     anon?.is_anonymized
-                                      ? "text-red-600"
-                                      : "text-green-600"
+                                      ? ""
+                                      : ""
                                   }`}
                                 >
                                   {anon?.is_anonymized
@@ -1629,7 +1340,7 @@ const downloadPDF = async () => {
 
           ) : (
 
-            <div className="border rounded-xl p-6 text-slate-500">
+            <div className="border rounded-xl p-6">
               No IP forensic records available.
             </div>
 
@@ -1658,7 +1369,7 @@ const downloadPDF = async () => {
                   className="border rounded-xl p-4"
                 >
 
-                  <p className="text-xs text-slate-500 capitalize">
+                  <p className="text-xs capitalize">
                     {key.replaceAll(
                       "_",
                       " "
@@ -1689,9 +1400,9 @@ const downloadPDF = async () => {
             Email Content
           </h3>
 
-          <div className="border rounded-xl bg-slate-50 p-6">
+          <div className="border rounded-xl p-6">
 
-            <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans leading-7">
+            <pre className="whitespace-pre-wrap text-sm font-sans leading-7">
               {email?.body ||
                 "Email body unavailable"}
             </pre>
@@ -1705,9 +1416,9 @@ const downloadPDF = async () => {
             FOOTER
         ================================================= */}
 
-        <div className="border-t px-10 py-6 bg-slate-50">
+        <div className="border-t px-10 py-6">
 
-          <div className="flex justify-between text-xs text-slate-500">
+          <div className="flex justify-between text-xs">
 
             <span>
               MailGuard • Email Forensic Intelligence
@@ -1739,7 +1450,7 @@ const Info = ({
 
   <div className="p-4 border rounded-lg">
 
-    <p className="text-xs uppercase tracking-wide text-slate-400">
+    <p className="text-xs uppercase tracking-wide">
       {label}
     </p>
 
@@ -1783,8 +1494,8 @@ const AuthCard = ({
         <span
           className={`px-2 py-1 rounded text-xs font-semibold ${
             result
-              ? "bg-green-100 text-green-700"
-              : "bg-gray-100 text-gray-500"
+              ? " "
+              : " "
           }`}
         >
           {result
@@ -1794,7 +1505,7 @@ const AuthCard = ({
 
       </div>
 
-      <pre className="mt-4 text-xs text-slate-500 whitespace-pre-wrap break-all">
+      <pre className="mt-4 text-xs whitespace-pre-wrap break-all">
         {result
           ? JSON.stringify(
               result,
@@ -1819,7 +1530,7 @@ const AnalysisItem = ({
   value
 }) => (
 
-  <div className="bg-white border rounded-lg p-4 flex justify-between items-center">
+  <div className="border rounded-lg p-4 flex justify-between items-center">
 
     <span className="text-sm font-medium">
       {label}
@@ -1828,8 +1539,8 @@ const AnalysisItem = ({
     <span
       className={`px-2.5 py-1 rounded-md text-xs font-semibold ${
         value
-          ? "bg-red-100 text-red-700"
-          : "bg-green-100 text-green-700"
+          ? " "
+          : " "
       }`}
     >
       {value
@@ -1860,8 +1571,8 @@ const Detection = ({
     <span
       className={`text-xs font-bold ${
         value
-          ? "text-red-600"
-          : "text-green-600"
+          ? ""
+          : ""
       }`}
     >
       {value
