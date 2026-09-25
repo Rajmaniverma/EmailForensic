@@ -252,15 +252,18 @@ const Forensicreport = () => {
   // =====================================================
 
 const downloadPDF = async () => {
-  const element = reportRef.current;
+  const source = reportRef.current;
 
-  if (!element) {
+  if (!source) {
     console.error("Report element not found");
     return;
   }
 
+  let pdfHost = null;
+  const removedStyles = [];
+
   try {
-    console.log("Starting color PDF generation...");
+    console.log("Starting PDF generation...");
 
     if (document.fonts?.ready) {
       await document.fonts.ready;
@@ -268,276 +271,379 @@ const downloadPDF = async () => {
 
     /*
      * IMPORTANT:
-     * html2canvas can fail when it encounters modern CSS color functions
-     * such as oklch()/oklab(). We keep the original UI colors, but before
-     * rendering the cloned document we convert those functions to browser-
-     * computed rgb()/rgba() values.
+     *
+     * The previous approach used html2canvas's `onclone` callback to
+     * replace oklch(). That is TOO LATE for some versions of html2canvas.
+     *
+     * html2canvas can parse the original document stylesheets BEFORE
+     * onclone runs. Therefore it can crash here:
+     *
+     *   Attempting to parse an unsupported color function "oklch"
+     *
+     * The reliable solution is:
+     *
+     * 1. Make a completely separate copy of the report.
+     * 2. Copy every computed style onto that copy as INLINE RGB/RGBA CSS.
+     * 3. Put that copy into an isolated off-screen host.
+     * 4. Temporarily remove <style> and stylesheet <link> elements from
+     *    the document while html2canvas runs.
+     * 5. Capture the isolated copy.
+     * 6. Restore the original stylesheets immediately afterwards.
+     *
+     * html2canvas therefore never gets a chance to parse Tailwind's
+     * oklch() declarations.
      */
-    const canvas = await html2canvas(element, {
-      scale: 1.25,
-      useCORS: true,
-      allowTaint: false,
-      backgroundColor: "#ffffff",
-      logging: false,
-      imageTimeout: 15000,
-      width: element.scrollWidth,
-      height: element.scrollHeight,
-      windowWidth: Math.max(document.documentElement.clientWidth, element.scrollWidth),
-      windowHeight: Math.max(document.documentElement.clientHeight, element.scrollHeight),
 
-      onclone: (clonedDocument) => {
-        const clonedReport = clonedDocument.querySelector("#forensic-report");
+    // ============================================================
+    // 1. CREATE ISOLATED PDF HOST
+    // ============================================================
 
-        if (!clonedReport) {
-          throw new Error("Cloned forensic report was not found");
-        }
+    pdfHost = document.createElement("div");
 
-        /*
-         * Convert one CSS color value using the browser itself.
-         * The browser understands oklch/oklab even when html2canvas does not.
-         */
-        const convertColor = (value) => {
-          const input = String(value || "").trim();
+    pdfHost.id = "__forensic_pdf_host__";
 
-          if (!input) {
-            return input;
-          }
-
-          const probe = clonedDocument.createElement("span");
-          probe.style.position = "absolute";
-          probe.style.left = "-99999px";
-          probe.style.top = "-99999px";
-          probe.style.color = "rgb(0, 0, 0)";
-          clonedDocument.body.appendChild(probe);
-
-          try {
-            probe.style.color = input;
-            const computed = clonedDocument.defaultView.getComputedStyle(probe).color;
-
-            if (computed && computed !== "rgba(0, 0, 0, 0)") {
-              return computed;
-            }
-
-            // Try background-color for values that are not accepted as text color.
-            probe.style.color = "";
-            probe.style.backgroundColor = input;
-            const background = clonedDocument.defaultView
-              .getComputedStyle(probe)
-              .backgroundColor;
-
-            if (background && background !== "rgba(0, 0, 0, 0)") {
-              return background;
-            }
-          } catch (e) {
-            console.warn("Could not convert CSS color:", input, e);
-          } finally {
-            probe.remove();
-          }
-
-          /*
-           * If conversion fails, use a safe neutral fallback instead of
-           * allowing the unsupported function to reach html2canvas.
-           */
-          return "#000000";
-        };
-
-        /*
-         * Replace modern color functions in arbitrary CSS text while
-         * respecting nested parentheses.
-         */
-        const replaceColorFunctions = (cssText) => {
-          let output = "";
-          let i = 0;
-
-          const functionNames = [
-            "color-mix",
-            "oklch",
-            "oklab",
-            "color",
-            "lch",
-            "lab",
-          ];
-
-          while (i < cssText.length) {
-            let matchedName = null;
-
-            for (const name of functionNames) {
-              const before = i === 0 ? "" : cssText[i - 1];
-              const segment = cssText.slice(i, i + name.length).toLowerCase();
-
-              if (
-                segment === name &&
-                (i === 0 || !/[a-z0-9_-]/i.test(before)) &&
-                cssText[i + name.length] === "("
-              ) {
-                matchedName = name;
-                break;
-              }
-            }
-
-            if (!matchedName) {
-              output += cssText[i];
-              i += 1;
-              continue;
-            }
-
-            const start = i;
-            let depth = 0;
-            let end = -1;
-
-            for (let j = i + matchedName.length; j < cssText.length; j++) {
-              const ch = cssText[j];
-
-              if (ch === "(") {
-                depth += 1;
-              } else if (ch === ")") {
-                depth -= 1;
-
-                if (depth === 0) {
-                  end = j + 1;
-                  break;
-                }
-              }
-            }
-
-            if (end === -1) {
-              output += cssText[i];
-              i += 1;
-              continue;
-            }
-
-            const token = cssText.slice(start, end);
-            output += convertColor(token);
-            i = end;
-          }
-
-          return output;
-        };
-
-        /*
-         * First convert all <style> blocks. This preserves the complete
-         * Tailwind layout/color design instead of deleting the colors.
-         */
-        clonedDocument.querySelectorAll("style").forEach((style) => {
-          style.textContent = replaceColorFunctions(style.textContent || "");
-        });
-
-        /*
-         * Also sanitize inline styles and CSS custom properties.
-         */
-        clonedDocument.querySelectorAll("*").forEach((node) => {
-          if (!node.hasAttribute("style")) return;
-
-          const originalStyle = node.getAttribute("style") || "";
-          node.setAttribute(
-            "style",
-            replaceColorFunctions(originalStyle)
-          );
-        });
-
-        /*
-         * Sanitize linked stylesheets too. This is important because Tailwind
-         * can be delivered as a <link> stylesheet rather than a <style> tag.
-         * We modify every accessible CSS rule in the cloned document while
-         * preserving layout, typography, borders, gradients, and colors.
-         */
-        const sanitizeRuleList = (rules) => {
-          if (!rules) return;
-
-          for (let index = 0; index < rules.length; index += 1) {
-            const rule = rules[index];
-
-            try {
-              if (rule.style) {
-                const originalCss = rule.style.cssText || "";
-                const convertedCss = replaceColorFunctions(originalCss);
-
-                if (convertedCss !== originalCss) {
-                  rule.style.cssText = convertedCss;
-                }
-              }
-
-              if (rule.cssRules) {
-                sanitizeRuleList(rule.cssRules);
-              }
-            } catch (e) {
-              // Some browser-generated CSS rules are read-only. They can be
-              // ignored because html2canvas will still render the rest.
-              console.warn("Could not sanitize CSS rule:", e);
-            }
-          }
-        };
-
-        clonedDocument.querySelectorAll("style").forEach((style) => {
-          try {
-            sanitizeRuleList(style.sheet?.cssRules);
-          } catch (e) {
-            console.warn("Could not access style rules:", e);
-          }
-        });
-
-        clonedDocument
-          .querySelectorAll("link[rel='stylesheet']")
-          .forEach((link) => {
-            try {
-              const sheet = link.sheet;
-
-              if (sheet?.cssRules) {
-                sanitizeRuleList(sheet.cssRules);
-              } else {
-                // Cross-origin sheets cannot be safely inspected. Remove them
-                // rather than allowing html2canvas to parse unsupported CSS.
-                link.remove();
-              }
-            } catch (e) {
-              console.warn("Removing inaccessible stylesheet:", e);
-              link.remove();
-            }
-          });
-
-        /*
-         * Force a stable white report background for printing while keeping
-         * all other original colors.
-         */
-        clonedReport.style.backgroundColor = "#ffffff";
-        clonedReport.style.boxShadow = "none";
-
-        /*
-         * Hide navigation and buttons from the PDF.
-         */
-        clonedReport
-          .querySelectorAll("button, [data-pdf-hide='true']")
-          .forEach((node) => {
-            node.style.setProperty("display", "none", "important");
-          });
-
-        /*
-         * Avoid sticky/fixed elements affecting the captured document.
-         */
-        clonedDocument.querySelectorAll("*").forEach((node) => {
-          const computed = clonedDocument.defaultView.getComputedStyle(node);
-
-          if (computed.position === "sticky" || computed.position === "fixed") {
-            node.style.position = "static";
-          }
-        });
-      },
+    Object.assign(pdfHost.style, {
+      position: "absolute",
+      left: "-100000px",
+      top: "0",
+      width: `${source.scrollWidth}px`,
+      minHeight: `${source.scrollHeight}px`,
+      background: "#ffffff",
+      overflow: "visible",
+      zIndex: "-1",
+      pointerEvents: "none",
     });
 
-    console.log("Canvas created:", canvas.width, canvas.height);
+    document.body.appendChild(pdfHost);
 
-    if (!canvas.width || !canvas.height) {
-      throw new Error("PDF canvas is empty");
-    }
+    // ============================================================
+    // 2. CLONE THE REPORT
+    // ============================================================
+
+    const pdfElement = source.cloneNode(true);
+
+    pdfElement.removeAttribute("id");
+    pdfElement.setAttribute(
+      "data-pdf-render-target",
+      "true"
+    );
+
+    Object.assign(pdfElement.style, {
+      display: "block",
+      position: "relative",
+      width: `${source.scrollWidth}px`,
+      minHeight: `${source.scrollHeight}px`,
+      height: "auto",
+      margin: "0",
+      background: "#ffffff",
+      boxShadow: "none",
+      overflow: "visible",
+    });
+
+    pdfHost.appendChild(pdfElement);
+
+    // ============================================================
+    // 3. REMOVE INTERACTIVE ELEMENTS
+    // ============================================================
+
+    pdfElement
+      .querySelectorAll(
+        "button, [data-pdf-hide='true']"
+      )
+      .forEach((node) => {
+        node.remove();
+      });
+
+    // ============================================================
+    // 4. COPY COMPUTED STYLES AS INLINE STYLES
+    // ============================================================
 
     /*
-     * IMPORTANT:
-     * Do NOT place one giant image on every PDF page with a negative Y
-     * position. That approach can produce blank/white pages.
+     * This is the critical part.
      *
-     * Instead, crop the canvas into exact A4-sized slices and put one slice
-     * on each PDF page.
+     * getComputedStyle() returns browser-resolved values such as:
+     *
+     *   rgb(37, 99, 235)
+     *
+     * instead of:
+     *
+     *   oklch(...)
+     *
+     * We put those resolved values directly on every element.
      */
+
+    const sourceNodes = [
+      source,
+      ...source.querySelectorAll("*"),
+    ];
+
+    const pdfNodes = [
+      pdfElement,
+      ...pdfElement.querySelectorAll("*"),
+    ];
+
+    const computedProperties = [
+      "display",
+      "position",
+
+      "width",
+      "height",
+      "min-width",
+      "min-height",
+      "max-width",
+      "max-height",
+
+      "margin",
+      "margin-top",
+      "margin-right",
+      "margin-bottom",
+      "margin-left",
+
+      "padding",
+      "padding-top",
+      "padding-right",
+      "padding-bottom",
+      "padding-left",
+
+      "box-sizing",
+
+      "color",
+      "background",
+      "background-color",
+      "background-image",
+
+      "border",
+      "border-width",
+      "border-style",
+      "border-color",
+      "border-top",
+      "border-right",
+      "border-bottom",
+      "border-left",
+      "border-radius",
+
+      "box-shadow",
+
+      "font-family",
+      "font-size",
+      "font-weight",
+      "font-style",
+      "line-height",
+      "letter-spacing",
+      "text-align",
+      "text-transform",
+      "text-decoration",
+      "text-decoration-color",
+
+      "white-space",
+      "word-break",
+      "overflow-wrap",
+
+      "vertical-align",
+
+      "opacity",
+
+      "flex",
+      "flex-direction",
+      "flex-wrap",
+      "flex-grow",
+      "flex-shrink",
+      "flex-basis",
+      "align-items",
+      "align-content",
+      "align-self",
+      "justify-content",
+      "justify-items",
+      "justify-self",
+      "gap",
+      "row-gap",
+      "column-gap",
+
+      "grid-template-columns",
+      "grid-template-rows",
+      "grid-column",
+      "grid-row",
+
+      "list-style",
+      "list-style-type",
+
+      "overflow",
+      "overflow-x",
+      "overflow-y",
+
+      "transform",
+      "transform-origin",
+
+      "visibility",
+    ];
+
+    const copyComputedStyles = (
+      original,
+      cloned
+    ) => {
+      const computed =
+        window.getComputedStyle(original);
+
+      for (const property of computedProperties) {
+        try {
+          const value =
+            computed.getPropertyValue(property);
+
+          if (value) {
+            cloned.style.setProperty(
+              property,
+              value,
+              "important"
+            );
+          }
+        } catch {
+          // Ignore individual unsupported properties.
+        }
+      }
+
+      /*
+       * Do not allow sticky/fixed elements to move
+       * independently during PDF capture.
+       */
+
+      if (
+        computed.position === "sticky" ||
+        computed.position === "fixed"
+      ) {
+        cloned.style.setProperty(
+          "position",
+          "static",
+          "important"
+        );
+      }
+
+      /*
+       * Pseudo-elements cannot be copied with cloneNode().
+       * For this report they are not required for the PDF.
+       */
+    };
+
+    const count = Math.min(
+      sourceNodes.length,
+      pdfNodes.length
+    );
+
+    for (let i = 0; i < count; i++) {
+      copyComputedStyles(
+        sourceNodes[i],
+        pdfNodes[i]
+      );
+    }
+
+    // ============================================================
+    // 5. FORCE PDF-SAFE ROOT COLORS
+    // ============================================================
+
+    pdfElement.style.setProperty(
+      "background-color",
+      "#ffffff",
+      "important"
+    );
+
+    pdfElement.style.setProperty(
+      "color",
+      "#111827",
+      "important"
+    );
+
+    pdfElement.style.setProperty(
+      "box-shadow",
+      "none",
+      "important"
+    );
+
+    // ============================================================
+    // 6. TEMPORARILY REMOVE ALL STYLESHEETS
+    // ============================================================
+
+    /*
+     * This is the actual fix for the error.
+     *
+     * Do NOT let html2canvas see Tailwind's stylesheet.
+     * The PDF clone already has all important styles inline.
+     */
+
+    document
+      .querySelectorAll(
+        "style, link[rel='stylesheet']"
+      )
+      .forEach((node) => {
+        removedStyles.push({
+          node,
+          parent: node.parentNode,
+          nextSibling: node.nextSibling,
+        });
+
+        node.remove();
+      });
+
+    // ============================================================
+    // 7. CAPTURE THE INLINE-STYLED CLONE
+    // ============================================================
+
+    const canvas = await html2canvas(
+      pdfElement,
+      {
+        scale: 1.25,
+
+        useCORS: true,
+        allowTaint: false,
+
+        backgroundColor: "#ffffff",
+
+        logging: false,
+
+        imageTimeout: 15000,
+
+        width: pdfElement.scrollWidth,
+        height: pdfElement.scrollHeight,
+
+        windowWidth: pdfElement.scrollWidth,
+        windowHeight: pdfElement.scrollHeight,
+      }
+    );
+
+    console.log(
+      "PDF canvas created:",
+      canvas.width,
+      canvas.height
+    );
+
+    if (
+      !canvas.width ||
+      !canvas.height
+    ) {
+      throw new Error(
+        "Generated PDF canvas is empty"
+      );
+    }
+
+    // ============================================================
+    // 8. RESTORE ORIGINAL STYLES IMMEDIATELY
+    // ============================================================
+
+    for (const item of removedStyles) {
+      if (!item.parent) {
+        continue;
+      }
+
+      item.parent.insertBefore(
+        item.node,
+        item.nextSibling
+      );
+    }
+
+    removedStyles.length = 0;
+
+    // ============================================================
+    // 9. CREATE A4 PDF
+    // ============================================================
+
     const pdf = new jsPDF({
       orientation: "portrait",
       unit: "mm",
@@ -545,48 +651,98 @@ const downloadPDF = async () => {
       compress: true,
     });
 
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const pdfWidth =
+      pdf.internal.pageSize.getWidth();
 
-    const pxPerMm = canvas.width / pdfWidth;
-    const pageHeightPx = Math.floor(pdfHeight * pxPerMm);
+    const pdfHeight =
+      pdf.internal.pageSize.getHeight();
+
+    /*
+     * Convert A4 height from millimeters to
+     * canvas pixels.
+     */
+
+    const pixelsPerMM =
+      canvas.width / pdfWidth;
+
+    const pageHeightPixels =
+      Math.floor(
+        pdfHeight * pixelsPerMM
+      );
+
+    // ============================================================
+    // 10. SLICE CANVAS INTO REAL PDF PAGES
+    // ============================================================
 
     let sourceY = 0;
     let pageNumber = 0;
 
     while (sourceY < canvas.height) {
-      const sliceHeightPx = Math.min(
-        pageHeightPx,
-        canvas.height - sourceY
-      );
+      const remaining =
+        canvas.height - sourceY;
 
-      const pageCanvas = document.createElement("canvas");
-      pageCanvas.width = canvas.width;
-      pageCanvas.height = sliceHeightPx;
+      const sliceHeight =
+        Math.min(
+          pageHeightPixels,
+          remaining
+        );
 
-      const ctx = pageCanvas.getContext("2d");
+      const pageCanvas =
+        document.createElement(
+          "canvas"
+        );
 
-      if (!ctx) {
-        throw new Error("Could not create PDF page canvas");
+      pageCanvas.width =
+        canvas.width;
+
+      pageCanvas.height =
+        sliceHeight;
+
+      const context =
+        pageCanvas.getContext("2d");
+
+      if (!context) {
+        throw new Error(
+          "Could not create PDF page canvas"
+        );
       }
 
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+      // White page background
+      context.fillStyle =
+        "#ffffff";
 
-      ctx.drawImage(
+      context.fillRect(
+        0,
+        0,
+        pageCanvas.width,
+        pageCanvas.height
+      );
+
+      // Copy exact slice
+      context.drawImage(
         canvas,
+
+        // source
         0,
         sourceY,
         canvas.width,
-        sliceHeightPx,
+        sliceHeight,
+
+        // destination
         0,
         0,
         canvas.width,
-        sliceHeightPx
+        sliceHeight
       );
 
-      const pageImage = pageCanvas.toDataURL("image/jpeg", 0.92);
-      const pageHeightMm = sliceHeightPx / pxPerMm;
+      const pageImage =
+        pageCanvas.toDataURL(
+          "image/jpeg",
+          0.92
+        );
+
+      const pageHeightMM =
+        sliceHeight / pixelsPerMM;
 
       if (pageNumber > 0) {
         pdf.addPage();
@@ -598,35 +754,91 @@ const downloadPDF = async () => {
         0,
         0,
         pdfWidth,
-        pageHeightMm,
+        pageHeightMM,
         undefined,
         "FAST"
       );
 
-      sourceY += sliceHeightPx;
-      pageNumber += 1;
+      sourceY += sliceHeight;
+      pageNumber++;
     }
 
-    const safeMessageId = String(messageId || "unknown")
-      .replace(/[<>:"/\\|?*]/g, "_")
-      .replace(/\s+/g, "_")
-      .replace(/_+/g, "_")
-      .substring(0, 100);
+    // ============================================================
+    // 11. SAFE FILE NAME
+    // ============================================================
 
-    pdf.save(`forensic-report-${safeMessageId}.pdf`);
+    const safeMessageId =
+      String(
+        messageId || "unknown"
+      )
+        .replace(
+          /[<>:"/\\|?*]/g,
+          "_"
+        )
+        .replace(
+          /\s+/g,
+          "_"
+        )
+        .replace(
+          /_+/g,
+          "_"
+        )
+        .substring(0, 100);
 
-    console.log(`PDF downloaded successfully: ${pageNumber} page(s)`);
+    // ============================================================
+    // 12. SAVE
+    // ============================================================
+
+    pdf.save(
+      `forensic-report-${safeMessageId}.pdf`
+    );
+
+    console.log(
+      `PDF generated successfully: ${pageNumber} page(s)`
+    );
+
   } catch (error) {
-    console.error("PDF generation failed:", error);
+    console.error(
+      "PDF generation failed:",
+      error
+    );
+
+    /*
+     * ALWAYS restore stylesheets if html2canvas
+     * throws an exception.
+     */
+
+    for (const item of removedStyles) {
+      if (!item.parent) {
+        continue;
+      }
+
+      try {
+        item.parent.insertBefore(
+          item.node,
+          item.nextSibling
+        );
+      } catch {
+        // Ignore restoration error.
+      }
+    }
+
+    removedStyles.length = 0;
 
     alert(
       `Failed to generate PDF: ${
-        error?.message || "Unknown error"
+        error?.message ||
+        "Unknown error"
       }`
     );
+
+  } finally {
+    // Remove temporary PDF DOM
+    if (pdfHost) {
+      pdfHost.remove();
+    }
   }
 };
-
   // =====================================================
   // RISK COLOR
   // =====================================================
