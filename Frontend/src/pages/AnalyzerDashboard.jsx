@@ -379,6 +379,7 @@ const city =
         <PageHeader
           navigate={navigate}
           onAnalyze={runFullAnalysis}
+          onReport={() => report("/Forensicreport")}
           analyzing={analyzing}
           progress={progress}
         />
