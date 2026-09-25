@@ -5,6 +5,276 @@ import jsPDF from "jspdf";
 
 const API_URL = "https://emailforensic.onrender.com";
 
+// =========================================================
+// PDF CSS SANITIZER
+// Converts modern CSS colors such as oklch()/oklab()
+// into browser-computed RGB values inside html2canvas's
+// cloned document only.
+// =========================================================
+
+const hasUnsupportedColorFunction = (value) => {
+  if (!value) return false;
+
+  return (
+    value.includes("oklch(") ||
+    value.includes("oklab(")
+  );
+};
+
+const convertCssValue = (
+  clonedDocument,
+  property,
+  value
+) => {
+  if (!hasUnsupportedColorFunction(value)) {
+    return value;
+  }
+
+  try {
+    const probe =
+      clonedDocument.createElement("div");
+
+    probe.style.setProperty(
+      property,
+      value
+    );
+
+    clonedDocument.body.appendChild(probe);
+
+    const computed =
+      clonedDocument.defaultView
+        ?.getComputedStyle(probe)
+        ?.getPropertyValue(property);
+
+    probe.remove();
+
+    if (
+      computed &&
+      !hasUnsupportedColorFunction(computed)
+    ) {
+      return computed;
+    }
+  } catch (error) {
+    console.warn(
+      `Could not convert CSS property ${property}:`,
+      error
+    );
+  }
+
+  return null;
+};
+
+const sanitizeCssRules = (
+  clonedDocument,
+  rules
+) => {
+  if (!rules) return;
+
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i];
+
+    try {
+      // Normal CSS rules, keyframes, etc.
+      if (rule.style) {
+        for (
+          let j = 0;
+          j < rule.style.length;
+          j++
+        ) {
+          const property =
+            rule.style[j];
+
+          const value =
+            rule.style.getPropertyValue(
+              property
+            );
+
+          if (
+            hasUnsupportedColorFunction(value)
+          ) {
+            const converted =
+              convertCssValue(
+                clonedDocument,
+                property,
+                value
+              );
+
+            if (converted) {
+              rule.style.setProperty(
+                property,
+                converted,
+                rule.style.getPropertyPriority(
+                  property
+                )
+              );
+            } else {
+              // Last-resort fallback.
+              // This prevents html2canvas from
+              // seeing oklch/oklab.
+              rule.style.setProperty(
+                property,
+                value
+                  .replace(
+                    /oklch\([^)]*\)/gi,
+                    "rgb(0, 0, 0)"
+                  )
+                  .replace(
+                    /oklab\([^)]*\)/gi,
+                    "rgb(0, 0, 0)"
+                  )
+              );
+            }
+          }
+        }
+      }
+
+      // Media queries, supports queries, layers, etc.
+      if (rule.cssRules) {
+        sanitizeCssRules(
+          clonedDocument,
+          rule.cssRules
+        );
+      }
+    } catch (error) {
+      console.warn(
+        "Could not sanitize CSS rule:",
+        error
+      );
+    }
+  }
+};
+
+const sanitizeClonedDocumentForPDF = (
+  clonedDocument
+) => {
+  // -------------------------------------------------------
+  // 1. Convert colors in <style> / stylesheet rules
+  // -------------------------------------------------------
+
+  for (
+    const stylesheet of clonedDocument.styleSheets
+  ) {
+    try {
+      if (stylesheet.cssRules) {
+        sanitizeCssRules(
+          clonedDocument,
+          stylesheet.cssRules
+        );
+      }
+    } catch (error) {
+      // Cross-origin stylesheets can throw a
+      // SecurityError when cssRules is accessed.
+      console.warn(
+        "Skipping inaccessible stylesheet:",
+        error
+      );
+    }
+  }
+
+  // -------------------------------------------------------
+  // 2. Sanitize inline styles
+  // -------------------------------------------------------
+
+  const allElements =
+    clonedDocument.querySelectorAll("*");
+
+  allElements.forEach((element) => {
+    const style = element.style;
+
+    if (!style) return;
+
+    for (
+      let i = style.length - 1;
+      i >= 0;
+      i--
+    ) {
+      const property = style[i];
+
+      const value =
+        style.getPropertyValue(property);
+
+      if (
+        hasUnsupportedColorFunction(value)
+      ) {
+        const converted =
+          convertCssValue(
+            clonedDocument,
+            property,
+            value
+          );
+
+        if (converted) {
+          style.setProperty(
+            property,
+            converted,
+            style.getPropertyPriority(
+              property
+            )
+          );
+        } else {
+          style.setProperty(
+            property,
+            value
+              .replace(
+                /oklch\([^)]*\)/gi,
+                "rgb(0, 0, 0)"
+              )
+              .replace(
+                /oklab\([^)]*\)/gi,
+                "rgb(0, 0, 0)"
+              )
+          );
+        }
+      }
+    }
+  });
+
+  // -------------------------------------------------------
+  // 3. Sanitize CSS custom properties
+  // -------------------------------------------------------
+
+  allElements.forEach((element) => {
+    const style =
+      element.style;
+
+    if (!style) return;
+
+    for (
+      let i = 0;
+      i < style.length;
+      i++
+    ) {
+      const property = style[i];
+
+      if (!property.startsWith("--")) {
+        continue;
+      }
+
+      const value =
+        style.getPropertyValue(property);
+
+      if (
+        hasUnsupportedColorFunction(value)
+      ) {
+        const converted =
+          convertCssValue(
+            clonedDocument,
+            property,
+            value
+          );
+
+        if (converted) {
+          style.setProperty(
+            property,
+            converted
+          );
+        }
+      }
+    }
+  });
+};
+
+
 const Forensicreport = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -262,153 +532,90 @@ const downloadPDF = async () => {
   try {
     console.log("Starting PDF generation...");
 
-    const canvas = await html2canvas(element, {
-      scale: 1.5,
-      useCORS: true,
-      allowTaint: false,
-      backgroundColor: "#ffffff",
-      logging: false,
-      imageTimeout: 15000,
+    // Make sure fonts/layout have finished before capture.
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
 
-      /*
-       * IMPORTANT
-       * html2canvas has problems parsing some modern CSS
-       * color functions such as oklch().
-       *
-       * We take the computed browser styles and put them
-       * directly on the cloned elements.
-       */
-      onclone: (clonedDocument) => {
-        const clonedElement =
-          clonedDocument.querySelector(
-            "#forensic-report"
+    const canvas = await html2canvas(
+      element,
+      {
+        scale: Math.min(
+          window.devicePixelRatio || 1,
+          1.5
+        ),
+
+        useCORS: true,
+        allowTaint: false,
+
+        backgroundColor: "#ffffff",
+
+        logging: false,
+
+        imageTimeout: 15000,
+
+        // Keep the capture dimensions equal to
+        // the actual report element.
+        width: element.scrollWidth,
+        height: element.scrollHeight,
+
+        windowWidth:
+          element.scrollWidth,
+
+        windowHeight:
+          element.scrollHeight,
+
+        onclone: (clonedDocument) => {
+          console.log(
+            "Sanitizing cloned document for PDF..."
           );
 
-        if (!clonedElement) {
-          console.warn(
-            "Cloned forensic report not found"
+          // IMPORTANT:
+          // Do NOT remove Tailwind stylesheets.
+          // html2canvas needs them for layout.
+          //
+          // Instead, convert oklch()/oklab()
+          // declarations to computed RGB values.
+          sanitizeClonedDocumentForPDF(
+            clonedDocument
           );
-          return;
-        }
 
-        const elements =
-          clonedElement.querySelectorAll("*");
-
-        elements.forEach((element) => {
-          const computedStyle =
-            clonedDocument.defaultView.getComputedStyle(
-              element
+          const clonedReport =
+            clonedDocument.querySelector(
+              "#forensic-report"
             );
 
-          /*
-           * Copy computed styles to inline styles.
-           *
-           * Browser converts Tailwind's modern color
-           * values into browser-compatible computed
-           * RGB values.
-           */
-          for (
-            let i = 0;
-            i < computedStyle.length;
-            i++
-          ) {
-            const property =
-              computedStyle[i];
-
-            const value =
-              computedStyle.getPropertyValue(
-                property
-              );
-
-            if (
-              value &&
-              !value.includes("oklch(") &&
-              !value.includes("oklab(")
-            ) {
-              try {
-                element.style.setProperty(
-                  property,
-                  value,
-                  computedStyle.getPropertyPriority(
-                    property
-                  )
-                );
-              } catch {
-                // Ignore unsupported inline properties
-              }
-            }
+          if (!clonedReport) {
+            console.warn(
+              "Forensic report was not found in clone."
+            );
+            return;
           }
 
-          /*
-           * Explicitly handle the most important
-           * color properties.
-           */
-          const colorProperties = [
-            "color",
-            "background-color",
-            "border-color",
-            "border-top-color",
-            "border-right-color",
-            "border-bottom-color",
-            "border-left-color",
-            "outline-color",
-            "text-decoration-color",
-            "column-rule-color",
-            "caret-color",
-            "accent-color",
-          ];
+          // Remove only things that should not appear
+          // in the PDF.
+          const pdfHiddenElements =
+            clonedReport.querySelectorAll(
+              "[data-pdf-hide='true']"
+            );
 
-          colorProperties.forEach(
-            (property) => {
-              const value =
-                computedStyle.getPropertyValue(
-                  property
-                );
-
-              if (
-                value &&
-                !value.includes("oklch(") &&
-                !value.includes("oklab(")
-              ) {
-                element.style.setProperty(
-                  property,
-                  value
-                );
-              }
-            }
-          );
-        });
-
-        /*
-         * Remove stylesheets from the cloned document.
-         *
-         * The styles have already been converted to
-         * inline computed styles above, so html2canvas
-         * doesn't need to parse Tailwind's oklch()
-         * declarations anymore.
-         */
-        const stylesheets =
-          clonedElement.querySelectorAll(
-            "style, link[rel='stylesheet']"
+          pdfHiddenElements.forEach(
+            (item) => item.remove()
           );
 
-        stylesheets.forEach((sheet) => {
-          sheet.remove();
-        });
+          // Make sure the report has a white background.
+          clonedReport.style.background =
+            "#ffffff";
 
-        /*
-         * Also remove any stylesheet from the head
-         * of the cloned document.
-         */
-        clonedDocument
-          .querySelectorAll(
-            "head style, head link[rel='stylesheet']"
-          )
-          .forEach((sheet) => {
-            sheet.remove();
-          });
-      },
-    });
+          clonedReport.style.color =
+            "#0f172a";
+
+          console.log(
+            "PDF clone sanitized successfully."
+          );
+        },
+      }
+    );
 
     console.log(
       "Canvas created:",
@@ -416,19 +623,19 @@ const downloadPDF = async () => {
       canvas.height
     );
 
-    // =================================================
-    // CANVAS → IMAGE
-    // =================================================
+    // ---------------------------------------------------
+    // Canvas -> JPEG
+    // ---------------------------------------------------
 
     const imgData =
       canvas.toDataURL(
         "image/jpeg",
-        0.95
+        0.92
       );
 
-    // =================================================
-    // CREATE PDF
-    // =================================================
+    // ---------------------------------------------------
+    // Create PDF
+    // ---------------------------------------------------
 
     const pdf = new jsPDF({
       orientation: "portrait",
@@ -453,9 +660,9 @@ const downloadPDF = async () => {
 
     let position = 0;
 
-    // =================================================
-    // FIRST PAGE
-    // =================================================
+    // ---------------------------------------------------
+    // First page
+    // ---------------------------------------------------
 
     pdf.addImage(
       imgData,
@@ -470,9 +677,9 @@ const downloadPDF = async () => {
 
     heightLeft -= pdfHeight;
 
-    // =================================================
-    // ADDITIONAL PAGES
-    // =================================================
+    // ---------------------------------------------------
+    // Additional pages
+    // ---------------------------------------------------
 
     while (heightLeft > 0) {
       position =
@@ -494,15 +701,24 @@ const downloadPDF = async () => {
       heightLeft -= pdfHeight;
     }
 
-    // =================================================
-    // SAFE FILE NAME
-    // =================================================
+    // ---------------------------------------------------
+    // Safe filename
+    // ---------------------------------------------------
 
     const safeMessageId =
       String(messageId || "unknown")
-        .replace(/[<>:"/\\|?*]/g, "_")
-        .replace(/\s+/g, "_")
-        .replace(/_+/g, "_")
+        .replace(
+          /[<>:"/\\|?*]/g,
+          "_"
+        )
+        .replace(
+          /\s+/g,
+          "_"
+        )
+        .replace(
+          /_+/g,
+          "_"
+        )
         .substring(0, 100);
 
     const fileName =
@@ -513,14 +729,10 @@ const downloadPDF = async () => {
       fileName
     );
 
-    // =================================================
-    // DOWNLOAD
-    // =================================================
-
     pdf.save(fileName);
 
     console.log(
-      "PDF downloaded successfully"
+      "PDF downloaded successfully."
     );
 
   } catch (error) {
@@ -537,6 +749,8 @@ const downloadPDF = async () => {
     );
   }
 };
+
+
   // =====================================================
   // RISK COLOR
   // =====================================================
@@ -628,6 +842,7 @@ const downloadPDF = async () => {
 
       <div
         ref={reportRef}
+        id="forensic-report"
         className="max-w-6xl mx-auto bg-white my-8 shadow-xl"
       >
 
