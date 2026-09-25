@@ -251,93 +251,155 @@ const Forensicreport = () => {
   // DOWNLOAD PDF
   // =====================================================
 
-  const downloadPDF = async () => {
+ const downloadPDF = async () => {
+  const element = reportRef.current;
 
-    const element =
-      reportRef.current;
+  if (!element) {
+    console.error("Report element not found");
+    return;
+  }
 
-    if (!element) return;
+  try {
+    console.log("Starting PDF generation...");
 
-    try {
+    // ==========================================
+    // 1. Capture report
+    // ==========================================
 
-      const canvas =
-        await html2canvas(element, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#ffffff",
-        });
+    const canvas = await html2canvas(element, {
+      scale: 1.5,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      logging: false,
+      imageTimeout: 15000,
+    });
 
-      const imgData =
-        canvas.toDataURL("image/png");
+    console.log(
+      "Canvas created:",
+      canvas.width,
+      canvas.height
+    );
 
-      const pdf =
-        new jsPDF("p", "mm", "a4");
+    // ==========================================
+    // 2. Convert canvas to image
+    // ==========================================
 
-      const pdfWidth =
-        pdf.internal.pageSize.getWidth();
+    const imgData = canvas.toDataURL(
+      "image/jpeg",
+      0.95
+    );
 
-      const pdfHeight =
-        pdf.internal.pageSize.getHeight();
+    // ==========================================
+    // 3. Create PDF
+    // ==========================================
 
-      const imgWidth =
-        pdfWidth;
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+      compress: true,
+    });
 
-      const imgHeight =
-        (canvas.height * pdfWidth) /
-        canvas.width;
+    const pdfWidth =
+      pdf.internal.pageSize.getWidth();
 
-      let heightLeft =
-        imgHeight;
+    const pdfHeight =
+      pdf.internal.pageSize.getHeight();
 
-      let position = 0;
+    const imgWidth = pdfWidth;
+
+    const imgHeight =
+      (canvas.height * pdfWidth) /
+      canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    // ==========================================
+    // 4. First page
+    // ==========================================
+
+    pdf.addImage(
+      imgData,
+      "JPEG",
+      0,
+      position,
+      imgWidth,
+      imgHeight,
+      undefined,
+      "FAST"
+    );
+
+    heightLeft -= pdfHeight;
+
+    // ==========================================
+    // 5. Additional pages
+    // ==========================================
+
+    while (heightLeft > 0) {
+      position =
+        heightLeft - imgHeight;
+
+      pdf.addPage();
 
       pdf.addImage(
         imgData,
-        "PNG",
+        "JPEG",
         0,
         position,
         imgWidth,
-        imgHeight
+        imgHeight,
+        undefined,
+        "FAST"
       );
 
       heightLeft -= pdfHeight;
-
-      while (heightLeft > 0) {
-
-        position =
-          heightLeft - imgHeight;
-
-        pdf.addPage();
-
-        pdf.addImage(
-          imgData,
-          "PNG",
-          0,
-          position,
-          imgWidth,
-          imgHeight
-        );
-
-        heightLeft -= pdfHeight;
-      }
-
-      pdf.save(
-        `forensic-report-${messageId}.pdf`
-      );
-
-    } catch (error) {
-
-      console.error(
-        "PDF generation failed:",
-        error
-      );
-
-      alert(
-        "Failed to generate PDF"
-      );
     }
-  };
 
+    // ==========================================
+    // 6. SAFE FILE NAME
+    // ==========================================
+
+    const safeMessageId =
+      String(messageId || "unknown")
+        .replace(/[<>:"/\\|?*]/g, "_")
+        .replace(/\s+/g, "_")
+        .replace(/_+/g, "_")
+        .substring(0, 100);
+
+    const fileName =
+      `forensic-report-${safeMessageId}.pdf`;
+
+    console.log(
+      "Saving PDF:",
+      fileName
+    );
+
+    // ==========================================
+    // 7. Download
+    // ==========================================
+
+    pdf.save(fileName);
+
+    console.log(
+      "PDF downloaded successfully"
+    );
+
+  } catch (error) {
+
+    console.error(
+      "PDF generation failed:",
+      error
+    );
+
+    alert(
+      `Failed to generate PDF: ${
+        error?.message || "Unknown error"
+      }`
+    );
+  }
+};
   // =====================================================
   // RISK COLOR
   // =====================================================
