@@ -251,7 +251,7 @@ const Forensicreport = () => {
   // DOWNLOAD PDF
   // =====================================================
 
- const downloadPDF = async () => {
+const downloadPDF = async () => {
   const element = reportRef.current;
 
   if (!element) {
@@ -262,10 +262,6 @@ const Forensicreport = () => {
   try {
     console.log("Starting PDF generation...");
 
-    // ==========================================
-    // 1. Capture report
-    // ==========================================
-
     const canvas = await html2canvas(element, {
       scale: 1.5,
       useCORS: true,
@@ -273,6 +269,145 @@ const Forensicreport = () => {
       backgroundColor: "#ffffff",
       logging: false,
       imageTimeout: 15000,
+
+      /*
+       * IMPORTANT
+       * html2canvas has problems parsing some modern CSS
+       * color functions such as oklch().
+       *
+       * We take the computed browser styles and put them
+       * directly on the cloned elements.
+       */
+      onclone: (clonedDocument) => {
+        const clonedElement =
+          clonedDocument.querySelector(
+            "#forensic-report"
+          );
+
+        if (!clonedElement) {
+          console.warn(
+            "Cloned forensic report not found"
+          );
+          return;
+        }
+
+        const elements =
+          clonedElement.querySelectorAll("*");
+
+        elements.forEach((element) => {
+          const computedStyle =
+            clonedDocument.defaultView.getComputedStyle(
+              element
+            );
+
+          /*
+           * Copy computed styles to inline styles.
+           *
+           * Browser converts Tailwind's modern color
+           * values into browser-compatible computed
+           * RGB values.
+           */
+          for (
+            let i = 0;
+            i < computedStyle.length;
+            i++
+          ) {
+            const property =
+              computedStyle[i];
+
+            const value =
+              computedStyle.getPropertyValue(
+                property
+              );
+
+            if (
+              value &&
+              !value.includes("oklch(") &&
+              !value.includes("oklab(")
+            ) {
+              try {
+                element.style.setProperty(
+                  property,
+                  value,
+                  computedStyle.getPropertyPriority(
+                    property
+                  )
+                );
+              } catch {
+                // Ignore unsupported inline properties
+              }
+            }
+          }
+
+          /*
+           * Explicitly handle the most important
+           * color properties.
+           */
+          const colorProperties = [
+            "color",
+            "background-color",
+            "border-color",
+            "border-top-color",
+            "border-right-color",
+            "border-bottom-color",
+            "border-left-color",
+            "outline-color",
+            "text-decoration-color",
+            "column-rule-color",
+            "caret-color",
+            "accent-color",
+          ];
+
+          colorProperties.forEach(
+            (property) => {
+              const value =
+                computedStyle.getPropertyValue(
+                  property
+                );
+
+              if (
+                value &&
+                !value.includes("oklch(") &&
+                !value.includes("oklab(")
+              ) {
+                element.style.setProperty(
+                  property,
+                  value
+                );
+              }
+            }
+          );
+        });
+
+        /*
+         * Remove stylesheets from the cloned document.
+         *
+         * The styles have already been converted to
+         * inline computed styles above, so html2canvas
+         * doesn't need to parse Tailwind's oklch()
+         * declarations anymore.
+         */
+        const stylesheets =
+          clonedElement.querySelectorAll(
+            "style, link[rel='stylesheet']"
+          );
+
+        stylesheets.forEach((sheet) => {
+          sheet.remove();
+        });
+
+        /*
+         * Also remove any stylesheet from the head
+         * of the cloned document.
+         */
+        clonedDocument
+          .querySelectorAll(
+            "head style, head link[rel='stylesheet']"
+          )
+          .forEach((sheet) => {
+            sheet.remove();
+          });
+      },
     });
 
     console.log(
@@ -281,18 +416,19 @@ const Forensicreport = () => {
       canvas.height
     );
 
-    // ==========================================
-    // 2. Convert canvas to image
-    // ==========================================
+    // =================================================
+    // CANVAS → IMAGE
+    // =================================================
 
-    const imgData = canvas.toDataURL(
-      "image/jpeg",
-      0.95
-    );
+    const imgData =
+      canvas.toDataURL(
+        "image/jpeg",
+        0.95
+      );
 
-    // ==========================================
-    // 3. Create PDF
-    // ==========================================
+    // =================================================
+    // CREATE PDF
+    // =================================================
 
     const pdf = new jsPDF({
       orientation: "portrait",
@@ -314,11 +450,12 @@ const Forensicreport = () => {
       canvas.width;
 
     let heightLeft = imgHeight;
+
     let position = 0;
 
-    // ==========================================
-    // 4. First page
-    // ==========================================
+    // =================================================
+    // FIRST PAGE
+    // =================================================
 
     pdf.addImage(
       imgData,
@@ -333,9 +470,9 @@ const Forensicreport = () => {
 
     heightLeft -= pdfHeight;
 
-    // ==========================================
-    // 5. Additional pages
-    // ==========================================
+    // =================================================
+    // ADDITIONAL PAGES
+    // =================================================
 
     while (heightLeft > 0) {
       position =
@@ -357,9 +494,9 @@ const Forensicreport = () => {
       heightLeft -= pdfHeight;
     }
 
-    // ==========================================
-    // 6. SAFE FILE NAME
-    // ==========================================
+    // =================================================
+    // SAFE FILE NAME
+    // =================================================
 
     const safeMessageId =
       String(messageId || "unknown")
@@ -376,9 +513,9 @@ const Forensicreport = () => {
       fileName
     );
 
-    // ==========================================
-    // 7. Download
-    // ==========================================
+    // =================================================
+    // DOWNLOAD
+    // =================================================
 
     pdf.save(fileName);
 
@@ -387,7 +524,6 @@ const Forensicreport = () => {
     );
 
   } catch (error) {
-
     console.error(
       "PDF generation failed:",
       error
@@ -395,7 +531,8 @@ const Forensicreport = () => {
 
     alert(
       `Failed to generate PDF: ${
-        error?.message || "Unknown error"
+        error?.message ||
+        "Unknown error"
       }`
     );
   }
