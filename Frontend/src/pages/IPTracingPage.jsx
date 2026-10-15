@@ -180,7 +180,7 @@ function IPTracingPage() {
   // ==========================================================
 
   const emailData =
-    analysisData?.email ||
+    analysisData?.email ||    //analaysis data = data.data
     analysisData?.email_data ||
     {};
 

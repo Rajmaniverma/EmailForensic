@@ -228,7 +228,7 @@
 
 #         response = client.chat.completions.create(
 
-#             model="openai/gpt-oss-safeguard-20b",
+#             model="openai/gpt-oss-120b",
 
 #             messages=[
 #                 {
@@ -696,7 +696,7 @@ Return ONLY valid JSON according to the provided schema.
 
             response = client.chat.completions.create(
 
-                model="openai/gpt-oss-safeguard-20b",
+                model="openai/gpt-oss-120b",
 
                 messages=[
                     {
